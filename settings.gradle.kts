@@ -24,5 +24,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "AndroidMVIBase"
 include(":app")
-include(":core:common")
-include(":core:network")
+include(":common")
+include(":network")
