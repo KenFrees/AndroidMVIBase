@@ -87,5 +87,4 @@ MVI 基类、Repository 示例、列表页、统一业务错误码、登录态�
 - `safeApiCall` 的通用 Exception 捕获会吞掉协程取消，见 [network 说明](network/README.md)。
 - 网络日志始终为 BODY，尚未区分 Debug/Release；Base URL 固定为演示服务。
 - 尚无业务响应码、会话过期、重试和离线策略。
-- `common/build/`、`network/build/` 目前未被忽略，不应纳入源码提交；后续处理 Git 忽略规则时补齐。
 - 规则文档和 Skill 用于引导与检查，不等于编译器层面的架构约束，也不能替代测试与人工 Review。
