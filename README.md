@@ -11,8 +11,9 @@
 | `app` | Application、Hilt 入口、Compose 欢迎页与主题 | [app/README.md](app/README.md) |
 | `common` | `AppResult` 以及成功、失败回调扩展 | [common/README.md](common/README.md) |
 | `network` | Hilt 提供网络对象、Moshi 转换、`safeApiCall` | [network/README.md](network/README.md) |
+| `ui` | Compose 公共组件，当前包含加载弹窗 | [ui/README.md](ui/README.md) |
 
-当前 Gradle 依赖：`app → network → common`，同时 `app → common`。这些是模块依赖，不代表 UI 应直接请求网络。
+当前 Gradle 依赖：`app → network → common`，同时 `app → common`、`app → ui`。这些是模块依赖，不代表 UI 应直接请求网络。
 
 MVI 基类、Repository 示例、列表页、统一业务错误码、登录态、离线存储均未完成。依赖已引入不等于能力已封装。
 

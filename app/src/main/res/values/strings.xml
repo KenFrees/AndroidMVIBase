@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">AndroidMVIBase</string>
+    <string name="show_loading">展示 Loading</string>
+    <string name="loading_message">正在加载…</string>
 </resources>

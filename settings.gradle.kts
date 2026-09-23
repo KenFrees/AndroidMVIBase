@@ -26,3 +26,4 @@ rootProject.name = "AndroidMVIBase"
 include(":app")
 include(":common")
 include(":network")
+include(":ui")

@@ -21,6 +21,7 @@ description: Use when integrating AndroidMVIBase into a business Android project
 | --- | --- |
 | 结果分支与回调 | [common README](../../common/README.md) |
 | Retrofit/Moshi/OkHttp、异常包装 | [network README](../../network/README.md) |
+| Compose 界面组件（当前含 Loading） | [UI 组件目录](../../ui/components/README.md) |
 | Hilt 宿主与 Compose 示例入口 | [app README](../../app/README.md) |
 | 已实现范围与当前限制 | [项目总览](../../README.md)中的当前进度和限制；学习路线不约束接入方 |
 
