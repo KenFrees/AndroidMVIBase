@@ -4,11 +4,11 @@
 
 ## 查找组件
 
-当前已实现 `LoadingDialog`。从 [组件目录](components/README.md) 按名称或用途查找。目录只列已实现组件，并指向各自的用法说明和源码；新增公共组件时同步登记，不把所有组件说明堆在本页。
+当前已实现 `LoadingDialog` 和 `ToastHost`。从 [组件目录](components/README.md) 按名称或用途查找。目录只列已实现组件，并指向各自的用法说明和源码；新增公共组件时同步登记，不把所有组件说明堆在本页。
 
 ## 接入与依赖
 
-同一 Gradle 工程中的调用方加入 `implementation(project(":ui"))`，并按目标组件的说明调用。例如 `LoadingDialog(visible = isLoading, message = "正在加载")`；实际文案应使用资源，状态约束见 [组件说明](components/loading-dialog.md)。当前模块通过 [build.gradle.kts](build.gradle.kts) 使用项目已有的 Compose BOM、UI 和 Material 3 依赖，没有额外的组件库。
+同一 Gradle 工程中的调用方加入 `implementation(project(":ui"))`，并按目标组件的说明调用。例如 `LoadingDialog(visible = isLoading, message = "正在加载")`，或在 `Scaffold` 中放置 `ToastHost` 并调用 `ToastHostState.showSuccess`；实际文案应使用资源，状态约束见各自的 [组件说明](components/README.md)。当前模块通过 [build.gradle.kts](build.gradle.kts) 使用项目已有的 Compose BOM、UI、Animation、Material 3 和 Coroutines 依赖，没有额外的组件库。
 
 ## 验证与限制
 

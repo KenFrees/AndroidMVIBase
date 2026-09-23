@@ -1,0 +1,5 @@
+<resources>
+    <string name="ui_toast_status_success">Success</string>
+    <string name="ui_toast_status_failure">Failure</string>
+    <string name="ui_toast_status_warning">Warning</string>
+</resources>

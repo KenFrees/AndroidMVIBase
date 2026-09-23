@@ -13,7 +13,7 @@ LoadingDialog(
 )
 ```
 
-上面是拟议的 MVI 页面用法；本仓库尚无 `uiState` 实现。真实演示见 [app 首页](../../app/src/main/java/com/ttxz/base/MainActivity.kt)：点击按钮显示弹窗，两秒后关闭，未发起网络请求。
+上面是拟议的 MVI 页面用法；本仓库尚无 `uiState` 实现。真实演示见 [app 的 UI 组件演示页](../../app/src/main/java/com/ttxz/base/demo/ui/UiComponentsScreen.kt)：从首页进入，点击按钮显示弹窗，两秒后关闭，未发起网络请求。
 
 需要允许用户主动关闭时，分别打开所需方式，并在回调中更新显示状态。例如只允许返回键关闭：
 
