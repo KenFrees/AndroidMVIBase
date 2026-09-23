@@ -19,11 +19,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.ttxz.base.demo.ui.UiComponentsScreen
+import com.ttxz.base.demo.post.PostDemoScreen
 import com.ttxz.base.ui.theme.AndroidMVIBaseTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 private const val HOME_ROUTE = "home"
 private const val UI_COMPONENTS_ROUTE = "ui-components"
+private const val POST_DEMO_ROUTE = "post-demo"
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -35,12 +37,16 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 NavHost(navController = navController, startDestination = HOME_ROUTE) {
                     composable(HOME_ROUTE) {
-                        HomeScreen(onOpenComponents = {
-                            navController.navigate(UI_COMPONENTS_ROUTE)
-                        })
+                        HomeScreen(
+                            onOpenComponents = { navController.navigate(UI_COMPONENTS_ROUTE) },
+                            onOpenNetworkDemo = { navController.navigate(POST_DEMO_ROUTE) },
+                        )
                     }
                     composable(UI_COMPONENTS_ROUTE) {
                         UiComponentsScreen(onBack = { navController.popBackStack() })
+                    }
+                    composable(POST_DEMO_ROUTE) {
+                        PostDemoScreen(onBack = { navController.popBackStack() })
                     }
                 }
             }
@@ -49,7 +55,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun HomeScreen(onOpenComponents: () -> Unit) {
+private fun HomeScreen(onOpenComponents: () -> Unit, onOpenNetworkDemo: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
@@ -59,6 +65,9 @@ private fun HomeScreen(onOpenComponents: () -> Unit) {
         Button(onClick = onOpenComponents) {
             Text(text = stringResource(R.string.open_ui_components))
         }
+        Button(onClick = onOpenNetworkDemo) {
+            Text(text = stringResource(R.string.open_network_demo))
+        }
     }
 }
 
@@ -66,6 +75,6 @@ private fun HomeScreen(onOpenComponents: () -> Unit) {
 @Composable
 private fun HomeScreenPreview() {
     AndroidMVIBaseTheme {
-        HomeScreen(onOpenComponents = {})
+        HomeScreen(onOpenComponents = {}, onOpenNetworkDemo = {})
     }
 }

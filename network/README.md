@@ -11,7 +11,7 @@
 | 文件 | 内容 |
 | --- | --- |
 | [NetworkModule.kt](src/main/java/com/ttxz/base/network/di/NetworkModule.kt) | 在 Hilt SingletonComponent 中提供 Moshi、OkHttpClient、Retrofit 单例 |
-| [NetworkCall.kt](src/main/java/com/ttxz/base/network/NetworkCall.kt) | `safeApiCall`：执行挂起函数并转换成功 / 异常结果 |
+| [NetworkCall.kt](src/main/java/com/ttxz/base/network/NetworkCall.kt) | `safeApiCall`：执行挂起函数、转换成功 / 错误结果并保留协程取消 |
 | [build.gradle.kts](build.gradle.kts) | 网络依赖和注解处理配置 |
 
 当前配置：
@@ -20,11 +20,11 @@
 - 连接、读取、写入超时各 30 秒，不代表一次完整请求总耗时最多 30 秒。
 - HttpLoggingInterceptor 使用 BODY 级别，当前所有构建类型都使用此级别。
 - Moshi 注册 `KotlinJsonAdapterFactory`，Retrofit 使用 MoshiConverterFactory。
-- 已引入 Moshi codegen，但没有业务 DTO 示例；不代表所有数据类都自动使用生成适配器。
+- 已引入 Moshi codegen，但 app 的 PostDto 演示使用 KotlinJsonAdapterFactory；不代表所有数据类都自动使用生成适配器。
 
 ## 请求与错误如何流转
 
-建议调用方向：业务 Repository → Retrofit 接口 → OkHttp → 服务端 → Moshi 解析 → `safeApiCall` → AppResult。当前还没有业务 Repository 和完整页面调用示例。
+建议调用方向：业务 Repository → Retrofit 接口 → OkHttp → 服务端 → Moshi 解析 → `safeApiCall` → AppResult。实际演示位于 app 的 [demo/post](../app/src/main/java/com/ttxz/base/demo/post) 包，从首页“网络请求示例”入口进入。
 
 `safeApiCall(block)` 当前行为：
 
@@ -33,6 +33,7 @@
 | block 正常返回 | `Success(block 的返回值)` |
 | `HttpException` | Error，code 为 HTTP 状态码，保留异常 |
 | `IOException` | Error，code 为空，保留异常 |
+| `CancellationException` | 继续抛出，调用方协程停止 |
 | 其他 `Exception` | Error，code 为空，保留异常 |
 
 该函数不发射 Loading，不切换 Dispatcher，不创建独立协程，也不实现业务重试。Retrofit `suspend` 接口适合放进 block；其他阻塞工作仍需调用方选择合适的执行环境。
@@ -49,7 +50,7 @@
 
 ### 2. 声明 API 并交给 Hilt
 
-下面是拟议示例，**尚未作为源码加入工程**。这里只演示复用方法，不据此宣称已验证接口调用。
+本仓库已经在 app 的共享数据包中实现 [PostApi.kt](../app/src/main/java/com/ttxz/base/data/remote/PostApi.kt)、[PostDto.kt](../app/src/main/java/com/ttxz/base/data/remote/PostDto.kt) 和 [PostApiModule.kt](../app/src/main/java/com/ttxz/base/data/remote/PostApiModule.kt)。简化后的调用方式如下：
 
 ```kotlin
 import dagger.Module
@@ -58,12 +59,13 @@ import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 import retrofit2.Retrofit
 import retrofit2.http.GET
+import retrofit2.http.Path
 
-data class PostDto(val id: Int, val title: String)
+data class PostDto(val userId: Int, val id: Int, val title: String, val body: String)
 
 interface PostApi {
-    @GET("posts")
-    suspend fun getPosts(): List<PostDto>
+    @GET("posts/{id}")
+    suspend fun getPost(@Path("id") id: Int): PostDto
 }
 
 @Module
@@ -75,30 +77,31 @@ object PostApiModule {
 }
 ```
 
-`Retrofit` 由现有 NetworkModule 提供，业务只增加自己的 API 绑定，不重新创建网络客户端。
+`Retrofit` 由现有 NetworkModule 提供，业务只增加自己的 API 绑定，不重新创建网络客户端。PostApi、PostDto 和绑定供 app 内多个功能使用，不放入通用 network 模块。app 因源码直接引用 Retrofit 类型而直接声明相应依赖。
 
 ### 3. 在数据层包装调用
 
 ```kotlin
 import com.ttxz.base.common.result.AppResult
+import com.ttxz.base.data.remote.PostApi
+import com.ttxz.base.data.remote.PostDto
 import com.ttxz.base.network.safeApiCall
 import javax.inject.Inject
 
 class PostRepository @Inject constructor(private val api: PostApi) {
-    suspend fun getPosts(): AppResult<List<PostDto>> =
-        safeApiCall { api.getPosts() }
+    suspend fun getPost(id: Int): AppResult<PostDto> =
+        safeApiCall { api.getPost(id) }
 }
 ```
 
-这是用法示意，生产接入前先修正下述取消和日志问题。Repository 的模块位置、是否拆接口、DTO 转领域模型等，留到完整示例阶段按实际需求确定。
+实际 [PostRepository.kt](../app/src/main/java/com/ttxz/base/demo/post/PostRepository.kt) 复用此方法；[PostDemoViewModel.kt](../app/src/main/java/com/ttxz/base/demo/post/PostDemoViewModel.kt) 接收页面 Action，将结果转换成 UiState，并发出一次性 Effect；[PostDemoScreen.kt](../app/src/main/java/com/ttxz/base/demo/post/PostDemoScreen.kt) 使用公共 LoadingDialog 与 ToastHost 展示加载和反馈，也可请求不存在的文章观察 HTTP 404。生产接入时仍需按业务决定 DTO 转换、错误文案和环境配置。
 
 ## 已知限制：接入正式业务前逐项完善
 
-1. **协程取消被捕获**：当前 `catch (Exception)` 会捕获 CancellationException，取消可能被当成业务失败。下一步网络封装应优先处理取消传播，并加取消测试。
-2. **日志没有区分环境**：BODY 可能记录请求 / 响应正文，正式环境应明确日志开关与敏感信息处理，不能直接照搬当前默认值。
-3. **环境地址固定**：没有向宿主开放 Base URL 配置；不能直接拿演示地址作为正式服务。
-4. **业务错误未统一**：HTTP 成功不代表服务端业务码成功；目前不解析业务 code/message，也不处理 Token、401 会话失效或刷新。
-5. **没有完整测试链路**：没有 MockWebServer 测试和实际 API/页面验证；空响应、解析失败、超时、离线等需按契约补测。
+1. **日志没有区分环境**：BODY 可能记录请求 / 响应正文，正式环境应明确日志开关与敏感信息处理，不能直接照搬当前默认值。
+2. **环境地址固定**：没有向宿主开放 Base URL 配置；JSONPlaceholder 是无认证的演示服务，不提供长期可用性保证，不能直接拿演示地址作为正式服务。
+3. **业务错误未统一**：HTTP 成功不代表服务端业务码成功；目前不解析业务 code/message，也不处理 Token、401 会话失效或刷新。
+4. **没有完整测试链路**：已有协程取消单测，但尚无 MockWebServer 的成功 / HTTP / IO 集成测试；空响应、解析失败、超时、离线等需按契约补测。
 
 ## 这一步需要学习什么
 
@@ -109,12 +112,12 @@ class PostRepository @Inject constructor(private val api: PostApi) {
 - 为什么 HTTP 状态码、服务端业务码和协程取消应分别处理？
 - 为什么单个请求结果不能代替页面 StateFlow？
 
-练习：沿 `safeApiCall { api.getPosts() }` 画出成功、HTTP 异常、取消的路径；标出当前取消处理不符合预期的位置。
+练习：沿 `safeApiCall { api.getPost(1) }` 画出成功、HTTP 异常、取消的路径；再在演示页分别请求文章和不存在的文章，观察界面分支。
 
 本步通过标准：能说明三种库的分工，能区分结果包装与请求调度，知道哪些能力还没实现。
 
 ## 如何验证修改
 
-构建用 `:network:assembleDebug`，宿主集成用 `:app:assembleDebug`。修改异常处理时测试成功、HTTP、IO 和取消；修改日志/环境注入时分别核对 Debug/Release 行为。
+构建用 `:network:assembleDebug`，宿主集成用 `:app:assembleDebug`；取消语义测试为 `:network:testDebugUnitTest`。修改异常处理时继续补测成功、HTTP、IO 和取消；修改日志/环境注入时分别核对 Debug/Release 行为。
 
 构建成功只说明编译与打包通过，不能证明服务可达、错误契约正确或设备运行正常。公开 API 或配置变化时，同步修改本说明、宿主调用与项目 Skill 中相关规则。

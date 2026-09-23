@@ -8,20 +8,20 @@
 
 | 模块 | 当前能力 | 阅读入口 |
 | --- | --- | --- |
-| `app` | Application、Hilt 入口、Compose 欢迎页与主题 | [app/README.md](app/README.md) |
+| `app` | Application、Hilt 入口、Compose 欢迎页、UI 与网络请求示例 | [app/README.md](app/README.md) |
 | `common` | `AppResult` 以及成功、失败回调扩展 | [common/README.md](common/README.md) |
 | `network` | Hilt 提供网络对象、Moshi 转换、`safeApiCall` | [network/README.md](network/README.md) |
 | `ui` | Compose 公共组件，当前包含加载弹窗与三类消息提示 | [ui/README.md](ui/README.md) |
 
 当前 Gradle 依赖：`app → network → common`，同时 `app → common`、`app → ui`。这些是模块依赖，不代表 UI 应直接请求网络。
 
-MVI 基类、Repository 示例、列表页、统一业务错误码、登录态、离线存储均未完成。依赖已引入不等于能力已封装。
+MVI 基类、列表页、统一业务错误码、登录态、离线存储均未完成。app 已有单篇文章的 Action / UiState / Effect 与 Repository / ViewModel 演示；依赖已引入不等于通用能力已封装。
 
 ## 技术与工程约定
 
 - Kotlin、Compose + Material3、Hilt + KSP、Retrofit + OkHttp + Moshi。
 - 异步采用 Coroutines，后续以 Flow / StateFlow 组织数据与 UI 状态。
-- 表现层计划采用轻量 MVI，具体 State / Event / Effect API 在对应学习步骤中确定。
+- 表现层采用轻量 MVI；app 文章示例使用 Action / UiState / Effect，通用基类 API 仍待设计。
 - 包名前缀 `com.ttxz.base`，最低 Android API 26。
 - 模块与 `app` 同级；本仓库本身就是基础框架，不再套 `core/`。
 - 依赖版本集中在 [libs.versions.toml](gradle/libs.versions.toml)，构建工具版本以文件实际配置为准。
@@ -44,10 +44,10 @@ MVI 基类、Repository 示例、列表页、统一业务错误码、登录态�
 | --- | --- | --- | --- |
 | 1 | 模块依赖、Hilt/KSP 与构建关系 | 空工程可构建，能解释三个模块职责 | 骨架已建立 |
 | 2 | `AppResult`、泛型、sealed interface、结果与 UI 状态的区别 | 能解释 Success / Error / Loading 的语义 | **建议从这里开始学习** |
-| 3 | Retrofit → Moshi → `safeApiCall`、协程取消与错误映射 | 修正取消异常处理，验证 HTTP/IO/取消分支 | 基础实现有待完善 |
+| 3 | Retrofit → Moshi → `safeApiCall`、协程取消与错误映射 | 修正取消异常处理，验证 HTTP/IO/取消分支 | 取消已修正并单测；HTTP/IO 专项测试待补 |
 | 4 | 网络环境配置、日志范围、服务注入 | 明确开发与正式环境的网络行为并验证 | 待开展 |
-| 5 | 轻量 MVI 的状态、用户操作与一次性效果 | 小型可测试基类，讲清生命周期和事件语义 | 待设计 |
-| 6 | API → Repository → ViewModel → Compose | 完整示例请求，覆盖加载、成功、失败与重试 | 待开展 |
+| 5 | 轻量 MVI 的状态、用户操作与一次性效果 | app 文章示例已采用 Action / UiState / Effect；通用基类须根据复用场景再设计 | 示例已实现，基类待设计 |
+| 6 | API → Repository → ViewModel → Compose | 完整示例请求，覆盖加载、成功、失败与重试 | app 单篇文章示例已实现，设备验证待做 |
 | 7 | 复用与 AI Review | 用第二个功能检查规范是否够用，按实际代码完善 Skill | 待开展 |
 
 这是学习路线，不是对所有后续实现的一次性授权。Room、分页、复杂导航等按真实需求再加入。
@@ -85,7 +85,7 @@ MVI 基类、Repository 示例、列表页、统一业务错误码、登录态�
 
 当前优先关注：
 
-- `safeApiCall` 的通用 Exception 捕获会吞掉协程取消，见 [network 说明](network/README.md)。
+- `safeApiCall` 已传播协程取消；HTTP / IO 路径和真实服务行为仍需更完整的测试，见 [network 说明](network/README.md)。
 - 网络日志始终为 BODY，尚未区分 Debug/Release；Base URL 固定为演示服务。
 - 尚无业务响应码、会话过期、重试和离线策略。
 - 规则文档和 Skill 用于引导与检查，不等于编译器层面的架构约束，也不能替代测试与人工 Review。

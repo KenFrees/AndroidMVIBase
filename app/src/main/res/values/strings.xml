@@ -3,6 +3,16 @@
     <string name="open_ui_components">UI 组件</string>
     <string name="ui_components_title">UI 组件演示</string>
     <string name="back">返回</string>
+    <string name="open_network_demo">网络请求示例</string>
+    <string name="network_demo_title">网络请求示例</string>
+    <string name="network_demo_request">请求文章</string>
+    <string name="network_demo_request_missing">测试 404 错误</string>
+    <string name="network_demo_loading">正在请求文章…</string>
+    <string name="network_demo_success_toast">文章请求成功</string>
+    <string name="network_demo_hint">点击按钮，从 JSONPlaceholder 获取演示文章。</string>
+    <string name="network_demo_http_error">请求失败：HTTP %1$d。可再次点击重试。</string>
+    <string name="network_demo_connection_error">请求失败，请检查网络后重试。</string>
+    <string name="network_demo_certificate_error">HTTPS 证书验证失败，请检查设备代理及其证书设置。</string>
     <string name="show_loading">展示 Loading</string>
     <string name="loading_message">正在加载…</string>
     <string name="show_success_toast">成功消息（短）</string>

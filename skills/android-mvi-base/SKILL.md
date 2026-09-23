@@ -32,7 +32,7 @@ description: Use when integrating AndroidMVIBase into a business Android project
 3. 复用框架提供的网络对象和结果类型，在业务数据层增加 API/Repository。业务代码使用业务包名；页面经其 ViewModel/Repository 获取数据，不在 Composable 内创建 Retrofit/OkHttp。
 4. 使用 AppResult 时完整区分 Success、Error、Loading；safeApiCall 不产生 Loading、不主动切线程、不自动解析业务失败码。onSuccess/onError 返回原结果，回调异常不会自动转换成 Error。
 5. 若 Retrofit API 返回 Response<T>，明确检查 HTTP 成功状态，不将 Success<Response<T>> 直接等同于请求成功。
-6. 使用框架前核对当前取消、日志和 Base URL 限制。缺陷或缺少配置入口阻碍接入时，报告证据及影响，提出框架侧改进需求；未经授权不自行补丁框架或修改另一个仓库。
+6. `safeApiCall` 目前会传播协程取消；使用前仍需核对日志和固定 Base URL 的限制。缺陷或缺少配置入口阻碍接入时，报告证据及影响，提出框架侧改进需求；未经授权不自行补丁框架或修改另一个仓库。
 7. 记录业务工程实际接入方式并验证相关调用。原框架 Debug 构建成功不等于当前业务工程已集成或设备已验证。
 
 ## 使用方式 Review
