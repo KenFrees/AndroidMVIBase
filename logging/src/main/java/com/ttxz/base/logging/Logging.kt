@@ -5,6 +5,8 @@ import android.util.Log
 import com.ttxz.base.logging.internal.InternalLog
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
@@ -42,9 +44,13 @@ object Logging {
     /** 挂起等待此前已接受记录刷新；不做 fsync。未启用或在记录回调中调用返回失败。 */
     suspend fun flush(): FlushResult = context.flush()
 
-    /** 后台生成 ZIP 快照（空目录也有效）；未启用或在记录回调中调用返回 Failure。
-     * 取消先协调已入队快照，再传播；磁盘 IO 不保证立即中断。成功文件属于可清理缓存；临时文件清理失败计入 status，不覆盖已发布结果或取消。 */
-    suspend fun export(): ExportResult = context.export()
+    /** 查询实际日志目录中的文件，可按日志命名日期筛选；从新到旧排序，不刷新、不复制内容。
+     * IO 在后台执行，目录尚未创建返回空列表；未初始化、初始化停用或 IO 失败返回 Result.failure，取消传播。
+     * 文件可能继续写入、滚动重命名或被清理。读取前可先 flush；持久副本由宿主负责。 */
+    suspend fun logFiles(date: java.time.LocalDate? = null): Result<List<java.io.File>> {
+        currentCoroutineContext().ensureActive()
+        return initialization?.logFiles(date) ?: Result.failure(IllegalStateException("日志尚未初始化"))
+    }
 
     /**
      * 停止接受记录并请求排空。最多等待 timeoutMillis；超时返回失败，后台关闭继续。
@@ -129,7 +135,6 @@ internal class LoggingContext {
     }
 
     suspend fun flush(): FlushResult = engine?.flush()?.let { it.copy(status = status()) } ?: FlushResult(false, status())
-    suspend fun export(): ExportResult = engine?.export() ?: ExportResult.Failure("Logging is not initialized")
 
     suspend fun close(timeoutMillis: Long): FlushResult {
         val current = synchronized(gate) { closed = true; engine }

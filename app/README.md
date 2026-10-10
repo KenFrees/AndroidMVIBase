@@ -6,13 +6,13 @@ app 用于启动、展示和验证基础模块。首页提供 UI 组件、网络
 
 应用 ID / 命名空间为 `com.ttxz.base`，minSdk 26；依赖 common、network 和 ui，并配置 Compose、Hilt、KSP。
 
-同时依赖 [logging](../logging/README.md)，BaseApp.onCreate 初始化 Logging，独立日志测试页按名称获取并复用 Logger。首页提供“日志测试”跳转入口；测试页显示实际日志保存目录，支持自定义正文、各等级写入、ERROR 异常堆栈、挂起刷新和导出；导出 ZIP 保存到私有缓存目录，示例不自动上传或分享。日志默认保存于 getExternalFilesDir(null)/logs，页面显示实际绝对路径；新外部目录及旧内部日志目录均排除备份。页面协程取消时仍先完成已提交快照协调，再清理临时文件。
+同时依赖 [logging](../logging/README.md)，BaseApp.onCreate 初始化 Logging，独立日志测试页按名称复用 Logger。首页提供“日志测试”入口；页面显示实际保存目录，支持正文输入、各等级写入、ERROR 异常堆栈、挂起刷新和查看文件绝对路径。日志默认保存于 getExternalFilesDir(null)/logs，新外部目录及旧内部目录均排除备份。读取、复制或分享日志由上游负责，示例不提供 ZIP 导出。
 
 | 文件 | 作用 |
 | --- | --- |
 | [BaseApp.kt](src/main/java/com/ttxz/base/BaseApp.kt) | 带 `@HiltAndroidApp` 的 Application，Hilt 宿主入口 |
 | [MainActivity.kt](src/main/java/com/ttxz/base/MainActivity.kt) | `@AndroidEntryPoint` Activity，通过 Navigation Compose 连接首页、UI、网络和日志演示页 |
-| [LogDemoScreen.kt](src/main/java/com/ttxz/base/demo/logging/LogDemoScreen.kt) | 固定 TAG 的各等级日志写入、刷新、累计状态与导出演示 |
+| [LogDemoScreen.kt](src/main/java/com/ttxz/base/demo/logging/LogDemoScreen.kt) | 固定 TAG 的各等级日志写入、刷新、累计状态与文件查询演示 |
 | [UiComponentsScreen.kt](src/main/java/com/ttxz/base/demo/ui/UiComponentsScreen.kt) | Loading 和 Toast 的页面内演示状态与按钮 |
 | [data/remote](src/main/java/com/ttxz/base/data/remote) | 宿主内可复用的 PostApi、PostDto 和 Hilt 绑定；复用 network 模块的 Retrofit |
 | [demo/post](src/main/java/com/ttxz/base/demo/post) | 文章功能包：Repository、Screen、ViewModel、Action、UiState 和 Effect |
@@ -67,4 +67,4 @@ Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显
 
 新增学习示例或变更入口时，更新本说明；不要把业务 API 和领域类型塞入公共基础模块。
 
-日志测试：从首页进入“日志测试”，输入正文，点击 INFO/WARN/ERROR 后刷新，检查累计写入数；DEBUG 在当前宿主配置下会被过滤，ERROR 带演示堆栈。导出 ZIP 仅保存到应用私有缓存，不自动上传或分享；返回首页不关闭应用级日志系统。
+日志测试：从首页进入“日志测试”，输入正文，点击 INFO/WARN/ERROR 后刷新，检查累计写入数；DEBUG 在当前宿主配置下会被过滤，ERROR 带演示堆栈。“查看日志文件”列出实际文件路径，查询失败显示错误类型；返回首页不关闭应用级日志系统。

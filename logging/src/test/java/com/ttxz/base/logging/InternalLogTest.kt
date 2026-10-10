@@ -8,7 +8,7 @@ class InternalLogTest {
     @Test fun engineDiagnosticsIdentifyOperationWithoutLeakingExceptionMessage() = kotlinx.coroutines.runBlocking {
         val root = java.nio.file.Files.createTempDirectory("log-operation").toFile()
         val output = java.util.Collections.synchronizedList(mutableListOf<String>())
-        val engine = LogEngine(java.io.File(root, "logs"), java.io.File(root, "exports"),
+        val engine = LogEngine(java.io.File(root, "logs"),
             LogConfig(logcatMinLevel = null, redact = { throw IllegalStateException("private content") }),
             diagnostic = InternalLog(true) { _, text -> output.add(text) }) { _, _, _ -> }
         try {
@@ -22,7 +22,7 @@ class InternalLogTest {
     @Test fun closeFailureIsReportedAsFailureInsteadOfSuccess() = kotlinx.coroutines.runBlocking {
         val root = java.nio.file.Files.createTempDirectory("log-close-feedback").toFile()
         val output = java.util.Collections.synchronizedList(mutableListOf<Pair<LogLevel, String>>())
-        val engine = LogEngine(java.io.File(root, "logs"), java.io.File(root, "exports"),
+        val engine = LogEngine(java.io.File(root, "logs"),
             LogConfig(logcatMinLevel = null, flushIntervalMillis = Long.MAX_VALUE),
             diagnostic = InternalLog(true) { level, text -> output.add(level to text) }) { _, _, _ -> }
         try {

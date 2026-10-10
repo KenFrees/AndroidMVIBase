@@ -14,12 +14,8 @@ import java.io.File
 import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import java.util.UUID
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicLong
-import java.util.zip.ZipEntry
-import java.util.zip.ZipOutputStream
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,12 +38,8 @@ import kotlinx.coroutines.withContext
  */
 internal class LogEngine(
     private val directory: File,
-    private val exportDirectory: File,
     requestedConfig: LogConfig,
     private val recovery: FileRecovery = FileRecovery(),
-    private val archiveOutput: (File) -> java.io.OutputStream = { it.outputStream() },
-    private val publishArchive: (File, File) -> Boolean = { source, target -> source.renameTo(target) },
-    private val removeExportFile: (File) -> Boolean = { it.deleteRecursively() },
     private val diagnostic: InternalLog = InternalLog(requestedConfig.isDebugLog),
     private val logcat: (LogLevel, String, String) -> Unit,
 ) {
@@ -62,7 +54,6 @@ internal class LogEngine(
     private sealed interface Command {
         data class Record(val time: Long, val level: LogLevel, val tag: String, val body: String, val exceptionText: String, val wasTruncated: Boolean) : Command
         data class Flush(val result: CompletableDeferred<FlushResult>) : Command
-        data class Snapshot(val folder: File, val result: CompletableDeferred<String?>) : Command
         data class Stop(val result: CompletableDeferred<FlushResult>) : Command
         data object Tick : Command
     }
@@ -236,82 +227,6 @@ internal class LogEngine(
         stopped.await()
     }
 
-    /**
-     * 在后台复制文件快照后压缩；导出期间至多一个控制操作。
-     * 失败不删除日志；取消传播并清理临时目录。成功 ZIP 属于可自动清理的缓存，宿主需及时分享或另存。
-     */
-    suspend fun export(): ExportResult = if (inOutput.get() == true || inPreparation.get() == true) {
-        ExportResult.Failure("Logging callback cannot export")
-    } else controls.withLock {
-        if (!isEnabled) return@withLock ExportResult.Failure("Invalid logging configuration")
-        if (closing) return@withLock ExportResult.Failure("Logging is closed")
-        withContext(Dispatchers.IO) {
-            diagnostic.write(LogLevel.DEBUG) { "开始导出日志快照" }
-            val id = UUID.randomUUID().toString()
-            val snapshot = File(exportDirectory, "snapshot-$id")
-            val temporary = File(exportDirectory, "$id.zip.tmp")
-            val target = File(exportDirectory, "$id.zip")
-            try {
-                check(exportDirectory.mkdirs() || exportDirectory.isDirectory) { "Cannot create export directory" }
-                // The control mutex excludes an active snapshot owned by this instance.
-                (exportDirectory.listFiles() ?: error("Cannot list export directory")).filter {
-                    it.name.matches(Regex("snapshot-[0-9a-f-]{36}|[0-9a-f-]{36}\\.zip\\.tmp"))
-                }.forEach { check(it.deleteRecursively()) { "Cannot clean abandoned export" } }
-                // Export cache is bounded independently from logs. Only this instance owns this directory.
-                val old = (exportDirectory.listFiles() ?: error("Cannot list export directory")).filter { it.isFile && it.name.endsWith(".zip") }.sortedBy { it.lastModified() }
-                var bytes = old.fold(0L) { sum, file -> Math.addExact(sum, file.length()) }
-                for (file in old) {
-                    // 为本次导出预留一份日志预算，避免预算加法/翻倍溢出。
-                    if (bytes <= config.maxDirectoryBytes &&
-                        System.currentTimeMillis() - file.lastModified() < config.retentionDays * 86_400_000L) continue
-                    val length = file.length()
-                    check(file.delete()) { "Cannot clean export cache" }
-                    bytes -= length
-                }
-                val result = CompletableDeferred<String?>()
-                val queued = synchronized(gate) {
-                    !closing && commands.trySend(Command.Snapshot(snapshot, result)).isSuccess
-                }
-                if (!queued) return@withContext ExportResult.Failure("Logger is closed")
-                // A cancelled waiter must not delete files while the consumer is still copying.
-                val snapshotError = withContext(NonCancellable) { result.await() }
-                currentCoroutineContext().ensureActive()
-                if (snapshotError != null) return@withContext ExportResult.Failure(snapshotError)
-                ZipOutputStream(archiveOutput(temporary).buffered()).use { zip ->
-                    val buffer = ByteArray(8192)
-                    (snapshot.listFiles() ?: error("Cannot list snapshot directory")).sortedBy { it.name }.forEach { file ->
-                        currentCoroutineContext().ensureActive()
-                        zip.putNextEntry(ZipEntry(file.name))
-                        file.inputStream().use { input ->
-                            while (true) {
-                                currentCoroutineContext().ensureActive()
-                                val count = input.read(buffer)
-                                if (count < 0) break
-                                zip.write(buffer, 0, count)
-                            }
-                        }
-                        zip.closeEntry()
-                    }
-                }
-                check(publishArchive(temporary, target)) { "Cannot publish log archive" }
-                diagnostic.write(LogLevel.INFO) { "日志导出成功：${target.absolutePath}" }
-                ExportResult.Success(target)
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { report("准备或压缩导出归档", error); ExportResult.Failure(error.javaClass.simpleName) }
-            finally {
-                cleanExportArtifact(snapshot)
-                cleanExportArtifact(temporary)
-            }
-        }
-    }
-
-    // 清理是独立的 IO 操作：报告失败，但不覆盖归档结果或调用者的取消。
-    private fun cleanExportArtifact(file: File) {
-        try {
-            if (file.exists() && !removeExportFile(file)) report("清理导出临时文件", java.io.IOException("Cannot clean export artifact"))
-        } catch (error: Exception) { report("清理导出临时文件", error) }
-    }
-
     private suspend fun consume() {
         var lastFlush = maintenanceStartNanos
         var lastCleanup = lastFlush
@@ -349,19 +264,6 @@ internal class LogEngine(
                     val result = flushFiles()
                     diagnostic.write(if (result.isSuccessful) LogLevel.INFO else LogLevel.WARN) { "手动刷新完成，成功：${result.isSuccessful}" }
                     command.result.complete(result)
-                }
-                is Command.Snapshot -> try {
-                    val flushed = flushFiles()
-                    if (flushed.isSuccessful) {
-                        files.snapshot(command.folder)
-                        command.result.complete(null)
-                    } else {
-                        // 刷新失败已计数；只传递失败类型，不再次报告。
-                        command.result.complete(flushed.status.lastError ?: "Cannot flush log snapshot")
-                    }
-                } catch (error: Exception) {
-                    report("复制日志快照", error)
-                    command.result.complete(error.javaClass.simpleName)
                 }
                 is Command.Stop -> {
                     val result = flushFiles()
@@ -423,7 +325,7 @@ internal class LogEngine(
         fun create(context: Context, config: LogConfig = LogConfig()): LogEngine {
             val app = context.applicationContext
             val storage = app.getExternalFilesDir(null) ?: throw ExternalLogStorageUnavailableException()
-            return LogEngine(File(storage, if ("directoryName" in config.validationWarnings()) "logs" else config.directoryName), File(app.cacheDir, "log-exports"), config) { level, tag, body ->
+            return LogEngine(File(storage, if ("directoryName" in config.validationWarnings()) "logs" else config.directoryName), config) { level, tag, body ->
                 val priority = when (level) { LogLevel.DEBUG -> Log.DEBUG; LogLevel.INFO -> Log.INFO; LogLevel.WARN -> Log.WARN; LogLevel.ERROR -> Log.ERROR }
                 Log.println(priority, tag, body)
             }

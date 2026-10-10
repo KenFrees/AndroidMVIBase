@@ -6,7 +6,6 @@ import java.io.File
 import java.nio.file.Files
 import java.time.Instant
 import java.time.ZoneId
-import java.util.zip.ZipFile
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -21,7 +20,7 @@ class StorageReliabilityTest {
         val directory = File(root, "configured")
         val saved = File(root, "temporarily-unavailable")
         var nanos = 0L
-        val engine = LogEngine(directory, File(root, "exports"), config(), FileRecovery { nanos }) { _, _, _ -> }
+        val engine = LogEngine(directory, config(), FileRecovery { nanos }) { _, _, _ -> }
         try {
             assertTrue(engine.info("Storage", "persisted"))
             assertTrue(engine.flush().isSuccessful)
@@ -54,7 +53,7 @@ class StorageReliabilityTest {
         val root = Files.createTempDirectory("log-rename-recovery").toFile()
         val directory = File(root, "configured")
         var nanos = 0L
-        val engine = LogEngine(directory, File(root, "exports"), config().copy(maxFileBytes = 1),
+        val engine = LogEngine(directory, config().copy(maxFileBytes = 1),
             FileRecovery { nanos }) { _, _, _ -> }
         try {
             engine.info("Storage", "original"); engine.flush()
@@ -107,26 +106,21 @@ class StorageReliabilityTest {
         } finally { files.close(); root.deleteRecursively() }
     }
 
-    @Test fun partialMultilineTailExportAndReopenPreserveCompletedLines() = runBlocking {
+    @Test fun partialMultilineTailReopenPreservesCompletedLines() = runBlocking {
         val root = Files.createTempDirectory("log-multiline-tail").toFile()
         val directory = File(root, "custom").apply { mkdir() }
         val file = File(directory, "2026-10-10.log")
         val complete = "2026-10-10 00:00:00.000 [Storage] failure\njava.lang.IllegalStateException: reason\n\tat Example.run(Example.kt:1)\n"
         file.writeBytes(complete.toByteArray() + "\tat broken".toByteArray() + byteArrayOf(0xe4.toByte()))
-        val engine = LogEngine(directory, File(root, "exports"), config()) { _, _, _ -> }
         try {
-            ZipFile((engine.export() as ExportResult.Success).file).use { zip ->
-                assertEquals(complete, zip.getInputStream(zip.getEntry(file.name)).bufferedReader().use { it.readText() })
-            }
             assertTrue(file.length() > complete.toByteArray().size)
             // 使用历史文件对应的日期直接验证重开修复，不依赖执行当天。
-            engine.close()
             val files = LogFiles(directory, config())
             try {
                 files.write(Instant.parse("2026-10-10T00:00:01Z").toEpochMilli(), "next historical")
                 files.flush()
                 assertEquals(complete + "next historical\n", file.readText())
             } finally { files.close() }
-        } finally { engine.close(); root.deleteRecursively() }
+        } finally { root.deleteRecursively() }
     }
 }

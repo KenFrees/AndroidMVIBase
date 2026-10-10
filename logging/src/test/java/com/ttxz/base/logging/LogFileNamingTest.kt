@@ -32,9 +32,8 @@ class LogFileNamingTest {
         } finally { files.close(); root.deleteRecursively() }
     }
 
-    @Test fun coexistenceDoesNotOverwriteExistingShardAndSnapshotIncludesPlainFile() {
+    @Test fun coexistenceDoesNotOverwriteExistingShard() {
         val root = Files.createTempDirectory("log-coexist").toFile()
-        val snapshot = Files.createTempDirectory("log-snapshot").toFile()
         val time = Instant.parse("2026-10-10T00:00:00Z").toEpochMilli()
         val files = LogFiles(root, LogConfig(zoneId = ZoneId.of("UTC")))
         try {
@@ -46,8 +45,6 @@ class LogFileNamingTest {
             assertEquals("plain\nnext\n", File(root, "2026-10-10-000001.log").readText())
             files.write(time + 86_400_000, "new")
             files.flush()
-            files.snapshot(snapshot)
-            assertTrue(File(snapshot, "2026-10-11.log").isFile)
-        } finally { files.close(); root.deleteRecursively(); snapshot.deleteRecursively() }
+        } finally { files.close(); root.deleteRecursively() }
     }
 }

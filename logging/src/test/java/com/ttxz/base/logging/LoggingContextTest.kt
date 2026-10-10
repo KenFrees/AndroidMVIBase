@@ -25,7 +25,7 @@ class LoggingContextTest {
         val root = Files.createTempDirectory("logging-level-stack").toFile()
         val context = LoggingContext()
         try {
-            context.initialize { LogEngine(File(root, "logs"), File(root, "exports"),
+            context.initialize { LogEngine(File(root, "logs"),
                 LogConfig(redact = { it.replace("sensitive message", "masked") }, fileMinLevel = LogLevel.DEBUG, logcatMinLevel = null)) { _, _, _ -> } }
             val logger = context.getLogger("Stack")
             val exception = IllegalStateException("sensitive message").apply {
@@ -69,7 +69,7 @@ class LoggingContextTest {
         try {
             assertTrue(context.initialize {
                 creations++
-                LogEngine(File(root, "logs"), File(root, "exports"), LogConfig(logcatMinLevel = null)) { _, _, _ -> }
+                LogEngine(File(root, "logs"), LogConfig(logcatMinLevel = null)) { _, _, _ -> }
             }.enabled)
             assertTrue(context.initialize { error("Must not recreate") }.warnings.contains("AlreadyInitialized"))
             assertEquals(1, creations)
@@ -93,12 +93,11 @@ class LoggingContextTest {
         assertFalse(failed.initialize { throw IllegalArgumentException("private detail") }.enabled)
         assertEquals(listOf("IllegalArgumentException"), failed.initialization!!.warnings)
         assertFalse(failed.flush().isSuccessful)
-        assertTrue(failed.export() is ExportResult.Failure)
         failed.close(1000)
         val root = Files.createTempDirectory("logging-callback").toFile()
         val context = LoggingContext()
         try {
-            context.initialize { LogEngine(File(root, "logs"), File(root, "exports"), LogConfig(fileMinLevel = LogLevel.DEBUG, logcatMinLevel = null)) { _, _, _ -> } }
+            context.initialize { LogEngine(File(root, "logs"), LogConfig(fileMinLevel = LogLevel.DEBUG, logcatMinLevel = null)) { _, _, _ -> } }
             assertFalse(context.getLogger("T").debug { throw IllegalStateException("private detail") })
             assertEquals(1L, context.status().failed)
             assertEquals("IllegalStateException", context.status().lastError)
@@ -113,7 +112,7 @@ class LoggingContextTest {
         var recursiveAccepted = true
         try {
             context.initialize {
-                LogEngine(File(root, "logs"), File(root, "exports"), LogConfig(queueCapacity = 5, discardingThreshold = 2,
+                LogEngine(File(root, "logs"), LogConfig(queueCapacity = 5, discardingThreshold = 2,
                     logcatMinLevel = null, redact = { body ->
                         recursiveAccepted = context.getLogger("Recursive").info("reentry")
                         if (body == "hold") { entered.countDown(); release.await(5, TimeUnit.SECONDS) }
@@ -142,7 +141,7 @@ class LoggingContextTest {
         val release = CountDownLatch(1)
         try {
             context.initialize {
-                LogEngine(File(root, "logs"), File(root, "exports"), LogConfig(logcatMinLevel = null,
+                LogEngine(File(root, "logs"), LogConfig(logcatMinLevel = null,
                     redact = { entered.countDown(); release.await(5, TimeUnit.SECONDS); it })) { _, _, _ -> }
             }
             val logger = context.getLogger("T")

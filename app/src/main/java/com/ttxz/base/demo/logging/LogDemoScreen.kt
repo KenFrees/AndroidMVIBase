@@ -28,13 +28,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.ttxz.base.R
-import com.ttxz.base.logging.ExportResult
 import com.ttxz.base.logging.LogLevel
 import com.ttxz.base.logging.Logging
 import com.ttxz.base.ui.theme.AndroidMVIBaseTheme
 import kotlinx.coroutines.launch
 
-/** 独立日志演示页；按固定 TAG 写入，挂起刷新和导出跟随页面生命周期。 */
+/** 独立日志演示页；按固定 TAG 写入，挂起刷新和文件查询跟随页面生命周期。 */
 @Composable
 fun LogDemoScreen(onBack: () -> Unit) {
     val resources = LocalResources.current
@@ -109,14 +108,15 @@ fun LogDemoScreen(onBack: () -> Unit) {
                 busy = true
                 scope.launch {
                     try {
-                        feedback = when (val result = Logging.export()) {
-                            is ExportResult.Success -> resources.getString(R.string.log_demo_exported, result.file.name)
-                            is ExportResult.Failure -> resources.getString(R.string.log_demo_export_failed, result.message)
-                        }
+                        feedback = Logging.logFiles().fold(
+                            onSuccess = { files -> if (files.isEmpty()) resources.getString(R.string.log_demo_files_empty)
+                                else files.joinToString("\n") { it.absolutePath } },
+                            onFailure = { resources.getString(R.string.log_demo_files_failed, it.javaClass.simpleName) },
+                        )
                         status = Logging.status()
                     } finally { busy = false }
                 }
-            }) { Text(stringResource(R.string.log_demo_export)) }
+            }) { Text(stringResource(R.string.log_demo_files)) }
             if (busy) Text(stringResource(R.string.log_demo_busy))
             if (feedback.isNotEmpty()) Text(feedback)
             Text(stringResource(R.string.log_demo_status, status.accepted, status.written, status.dropped, status.failed))

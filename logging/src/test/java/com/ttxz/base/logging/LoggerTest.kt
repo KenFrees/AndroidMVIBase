@@ -9,7 +9,6 @@ import java.time.ZoneId
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import org.junit.Assert.*
 import org.junit.Test
@@ -19,7 +18,7 @@ class LoggerTest {
 
     @Test fun fixedFormatEscapesInjectedRecordsAndFlushPreservesOrder() = runBlocking {
         val root = Files.createTempDirectory("logger-test").toFile()
-        val logger = LogEngine(File(root, "logs"), File(root, "exports"), config()) { _, _, _ -> }
+        val logger = LogEngine(File(root, "logs"), config()) { _, _, _ -> }
         try {
             assertTrue(logger.info("A]\nB", "first\nforged"))
             assertTrue(logger.info("A", "second"))
@@ -36,11 +35,11 @@ class LoggerTest {
         } finally { logger.close(); root.deleteRecursively() }
     }
 
-    @Test fun boundedQueueDropsWithoutWaitingAndExportUsesSnapshot() = runBlocking {
+    @Test fun boundedQueueDropsWithoutWaiting() = runBlocking {
         val root = Files.createTempDirectory("logger-test").toFile()
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val logger = LogEngine(File(root, "logs"), File(root, "exports"), config().copy(queueCapacity = 1, redact = {
+        val logger = LogEngine(File(root, "logs"), config().copy(queueCapacity = 1, redact = {
             entered.countDown(); check(release.await(5, TimeUnit.SECONDS)); it
         })) { _, _, _ -> }
         try {
@@ -50,19 +49,16 @@ class LoggerTest {
             assertEquals(1L, logger.status().dropped)
             release.countDown()
             logger.flush()
-            val export = logger.export() as ExportResult.Success
-            java.util.zip.ZipFile(export.file).use { zip ->
-                val entry = zip.entries().nextElement()
-                val text = zip.getInputStream(entry).bufferedReader().use { it.readText() }
-                assertTrue(text.contains("accepted")); assertFalse(text.contains("dropped"))
-            }
+            val text = File(root, "logs").listFiles()!!.single().readText()
+            assertTrue(text.contains("accepted")); assertFalse(text.contains("dropped"))
+
         } finally { release.countDown(); logger.close(); root.deleteRecursively() }
     }
 
     @Test fun ioFailureIsReportedAndLaterWriteRecovers() = runBlocking {
         val root = Files.createTempDirectory("logger-test").toFile()
         val directory = File(root, "logs").apply { writeText("occupied") }
-        val logger = LogEngine(directory, File(root, "exports"), config()) { _, _, _ -> }
+        val logger = LogEngine(directory, config()) { _, _, _ -> }
         try {
             logger.info("A", "fails"); logger.flush()
             assertEquals(1L, logger.status().failed)
@@ -94,7 +90,7 @@ class LoggerTest {
     @Test fun invalidDatePatternAndSurrogateTruncation() = runBlocking {
         for (pattern in listOf("'prefix' yyyy-MM-dd HH:mm", "yyyy-MM-dd\nHH:mm", "HH:mm")) {
             val root = Files.createTempDirectory("logger-date-fallback").toFile()
-            val logger = LogEngine(File(root, "logs"), File(root, "exports"), config().copy(datePattern = pattern)) { _, _, _ -> }
+            val logger = LogEngine(File(root, "logs"), config().copy(datePattern = pattern)) { _, _, _ -> }
             try {
                 assertTrue(logger.isEnabled)
                 assertEquals(listOf("datePattern"), logger.configurationWarnings)
@@ -119,22 +115,20 @@ class LoggerTest {
         assertTrue(LogConfig().validationWarnings().isEmpty())
         for (configuration in invalid) {
             val root = Files.createTempDirectory("logger-disabled").toFile()
-            val logger = LogEngine(File(root, "logs"), File(root, "exports"), configuration) { _, _, _ -> fail("Disabled Logcat") }
+            val logger = LogEngine(File(root, "logs"), configuration) { _, _, _ -> fail("Disabled Logcat") }
             try {
                 assertFalse(logger.isEnabled)
                 assertTrue(logger.configurationWarnings.isNotEmpty())
                 assertFalse(logger.info("T", "ignored"))
                 assertFalse(logger.flush().isSuccessful)
-                assertTrue(logger.export() is ExportResult.Failure)
                 assertFalse(File(root, "logs").exists())
-                assertFalse(File(root, "exports").exists())
             } finally { logger.close(); root.deleteRecursively() }
         }
     }
 
     @Test fun concurrentProducersAccountForEveryAttempt() = runBlocking {
         val root = Files.createTempDirectory("logger-concurrent").toFile()
-        val logger = LogEngine(File(root, "logs"), File(root, "exports"), LogConfig(logcatMinLevel = null)) { _, _, _ -> }
+        val logger = LogEngine(File(root, "logs"), LogConfig(logcatMinLevel = null)) { _, _, _ -> }
         val pool = java.util.concurrent.Executors.newFixedThreadPool(4)
         try {
             val tasks = (1..4).map { producer -> pool.submit { repeat(500) { logger.info("P$producer", "record-$it") } } }
@@ -148,11 +142,11 @@ class LoggerTest {
         } finally { pool.shutdownNow(); logger.close(); root.deleteRecursively() }
     }
 
-    @Test fun cancelledExportWaitsForSnapshotBeforeCleaningAndRedactionFailureDoesNotKillWorker() = runBlocking {
+    @Test fun redactionFailureDoesNotKillWorker() = runBlocking {
         val root = Files.createTempDirectory("logger-cancel").toFile()
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val logger = LogEngine(File(root, "logs"), File(root, "exports"), config().copy(redact = {
+        val logger = LogEngine(File(root, "logs"), config().copy(redact = {
             if (it == "hold") { entered.countDown(); check(release.await(5, TimeUnit.SECONDS)) }
             if (it == "bad") throw IllegalArgumentException("redaction")
             it
@@ -160,12 +154,8 @@ class LoggerTest {
         try {
             logger.info("A", "hold")
             assertTrue(entered.await(5, TimeUnit.SECONDS))
-            val export = launch { logger.export() }
-            delay(100)
-            export.cancel()
             release.countDown()
-            export.join()
-            assertTrue(File(root, "exports").listFiles().orEmpty().none { it.name.startsWith("snapshot-") })
+            logger.flush()
             logger.info("A", "bad")
             logger.info("A", "good")
             logger.flush()

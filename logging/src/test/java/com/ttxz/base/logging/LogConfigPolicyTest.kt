@@ -21,20 +21,20 @@ class LogConfigPolicyTest {
         assertTrue(config.copy(discardingThreshold = config.queueCapacity + 1).validationWarnings().contains("discardingThreshold"))
     }
 
-    @Test fun largestNumericConfigurationCanWriteAndExportWithoutOverflowOrPrematureDeletion() = runBlocking {
+    @Test fun largestNumericConfigurationCanWriteWithoutOverflowOrPrematureDeletion() = runBlocking {
         val root = Files.createTempDirectory("logger-large-config").toFile()
         val config = LogConfig(logcatMinLevel = null, queueCapacity = Int.MAX_VALUE,
             maxFileBytes = Long.MAX_VALUE, maxDirectoryBytes = Long.MAX_VALUE,
             retentionDays = Int.MAX_VALUE, flushIntervalMillis = Long.MAX_VALUE)
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), config) { _, _, _ -> }
+        val engine = LogEngine(File(root, "logs"), config) { _, _, _ -> }
         try {
             assertTrue(engine.isEnabled)
             assertTrue(engine.info("Policy", "first"))
             assertTrue(engine.flush().isSuccessful)
-            val first = (engine.export() as ExportResult.Success).file
+            val first = File(root, "logs").listFiles()!!.single()
             assertTrue(engine.info("Policy", "second"))
             assertTrue(engine.flush().isSuccessful)
-            val second = (engine.export() as ExportResult.Success).file
+            val second = File(root, "logs").listFiles()!!.single()
             assertTrue(first.exists())
             assertTrue(second.exists())
             assertEquals(2L, engine.status().written)
@@ -45,7 +45,7 @@ class LogConfigPolicyTest {
     @Test fun shortPositiveFlushIntervalActuallyFlushesWithoutExplicitControl() = runBlocking {
         val root = Files.createTempDirectory("logger-short-flush").toFile()
         val directory = File(root, "logs")
-        val engine = LogEngine(directory, File(root, "exports"), LogConfig(
+        val engine = LogEngine(directory, LogConfig(
             logcatMinLevel = null, queueCapacity = 4097, retentionDays = 366, flushIntervalMillis = 1,
         )) { _, _, _ -> }
         try {

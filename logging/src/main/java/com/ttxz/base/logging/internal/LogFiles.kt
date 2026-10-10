@@ -100,17 +100,6 @@ internal class LogFiles(private val directory: File, private val config: LogConf
         }
     }
 
-    fun snapshot(destination: File) {
-        ensureDirectory()
-        check(destination.mkdirs() || destination.isDirectory) { "Cannot create snapshot directory" }
-        logs().forEach {
-            val copy = it.copyTo(File(destination, it.name))
-            // 上次写入失败或进程骤停后，尚未重新打开的源文件可能有残尾。
-            // 只修复副本，导出不修改诊断源文件。
-            repairTail(copy)
-        }
-    }
-
     private fun shard(day: LocalDate, index: Long): File =
         File(directory, "$day-${index.toString().padStart(6, '0')}.log")
 

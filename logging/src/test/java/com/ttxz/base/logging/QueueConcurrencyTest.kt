@@ -17,7 +17,7 @@ class QueueConcurrencyTest {
         val release = CountDownLatch(1)
         val prepared = AtomicInteger()
         val pool = Executors.newFixedThreadPool(8)
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"),
+        val engine = LogEngine(File(root, "logs"),
             LogConfig(queueCapacity = 1, logcatMinLevel = null, redact = {
                 entered.countDown(); check(release.await(10, TimeUnit.SECONDS)); it
             })) { _, _, _ -> }

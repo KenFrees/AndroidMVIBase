@@ -3,7 +3,6 @@ package com.ttxz.base.logging
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
-import java.util.zip.ZipFile
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
@@ -29,7 +28,7 @@ class LoggerDeviceTest {
             assertFalse(context.getLogger("Unavailable").error("ignored"))
             assertEquals(1L, context.status().dropped)
             assertFalse(context.flush().isSuccessful)
-            assertTrue(context.export() is ExportResult.Failure)
+            assertTrue(result.logFiles().isFailure)
         } finally { context.close(1000) }
     }
 
@@ -46,23 +45,20 @@ class LoggerDeviceTest {
             assertTrue(Logging.getLogger("Second").warn("public second"))
             assertTrue(Logging.flush().isSuccessful)
             assertEquals(2L, Logging.status().written)
-            val export = Logging.export() as ExportResult.Success
-            ZipFile(export.file).use { zip ->
-                val text = zip.entries().toList().joinToString { zip.getInputStream(it).bufferedReader().use { reader -> reader.readText() } }
-                assertTrue(text.contains("[PublicFacade] public first"))
-                assertTrue(text.contains("[Second] public second"))
-            }
+            val text = Logging.logFiles().getOrThrow().joinToString { it.readText() }
+            assertTrue(text.contains("[PublicFacade] public first"))
+            assertTrue(text.contains("[Second] public second"))
+
         } finally {
             Logging.close()
             directory.deleteRecursively()
-            File(context.cacheDir, "log-exports").deleteRecursively()
         }
     }
 
-    @Test fun largeUtf8RecordSurvivesFlushExportAndRollsBeforeNextRecord() = runBlocking {
+    @Test fun largeUtf8RecordSurvivesFlushAndRollsBeforeNextRecord() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val root = File(context.filesDir, "large-record-test")
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), LogConfig(
+        val engine = LogEngine(File(root, "logs"), LogConfig(
             logcatMinLevel = null, maxFileBytes = 1024 * 1024, maxDirectoryBytes = 4 * 1024 * 1024,
         )) { _, _, _ -> }
         val message = "测😀".repeat(160_000) + "END"
@@ -76,9 +72,7 @@ class LoggerDeviceTest {
             assertTrue(files.first().length() > 1024 * 1024)
             assertEquals(message, files.first().readLines().single().substringAfter("[Large] "))
             assertTrue(files.last().readText().endsWith("[Large] next\n"))
-            ZipFile((engine.export() as ExportResult.Success).file).use { zip ->
-                assertEquals(files.first().readText(), zip.getInputStream(zip.getEntry(files.first().name)).reader(Charsets.UTF_8).use { it.readText() })
-            }
+
             assertEquals(0L, engine.status().truncated)
             assertEquals(0L, engine.status().failed)
         } finally { engine.close(); root.deleteRecursively() }
@@ -106,17 +100,14 @@ class LoggerDeviceTest {
             assertTrue(files[1].name.endsWith("-000001.log"))
             val expected = "[Layout] second\njava.lang.IllegalStateException: 测试异常\n\tat Example.run(Example.kt:42)\n"
             assertTrue(files[1].readText().contains(expected))
-            ZipFile((engine.export() as ExportResult.Success).file).use { zip ->
-                assertTrue(zip.getInputStream(zip.getEntry(files[1].name)).bufferedReader().use { it.readText() }.contains(expected))
-            }
+
         } finally {
             engine.close()
             directory.deleteRecursively()
-            File(context.cacheDir, "log-exports").deleteRecursively()
         }
     }
 
-    @Test fun mainThreadSubmissionFlushExportAndReopen() = runBlocking {
+    @Test fun mainThreadSubmissionFlushAndReopen() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val config = LogConfig(directoryName = "reopen-${UUID.randomUUID()}", isDebugLog = true, logcatMinLevel = null)
@@ -136,13 +127,14 @@ class LoggerDeviceTest {
             assertEquals(300L, status.accepted + status.dropped)
             assertEquals(status.accepted, status.written)
             assertEquals(0L, status.failed)
-            val export = logger.export() as ExportResult.Success
-            ZipFile(export.file).use { zip ->
-                val entries = zip.entries().toList()
-                val lines = entries.flatMap { entry -> zip.getInputStream(entry).bufferedReader().use { it.readLines() } }
-                assertEquals(status.accepted, lines.size.toLong())
-                assertTrue(lines.all { it.contains("[Device]") && it.contains("\\ncontinuation") })
-            }
+            val initialized = LogInitialization(true, emptyList(), directory.absolutePath)
+            val files = initialized.logFiles().getOrThrow()
+            val lines = files.flatMap { it.readLines() }
+            assertEquals(status.accepted, lines.size.toLong())
+            assertTrue(lines.all { it.contains("[Device]") && it.contains("\\ncontinuation") })
+            val day = java.time.LocalDate.parse(files.first().name.take(10))
+            assertEquals(files, initialized.logFiles(day).getOrThrow())
+
             logger.close()
             val reopened = LogEngine.create(context, config)
             try {
@@ -155,7 +147,6 @@ class LoggerDeviceTest {
         } finally {
             logger.close()
             directory.deleteRecursively()
-            File(context.cacheDir, "log-exports").deleteRecursively()
         }
     }
 }

@@ -12,7 +12,6 @@ import java.time.Instant
 import java.time.ZoneId
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import java.util.zip.ZipFile
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
@@ -23,7 +22,7 @@ class StageOneRegressionTest {
 
     @Test fun bodyAndRedactionExpansionAreCompleteWhileTagAndStackStayBounded() = runBlocking {
         val root = Files.createTempDirectory("logger-complete").toFile()
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), config().copy(
+        val engine = LogEngine(File(root, "logs"), config().copy(
             maxDirectoryBytes = 1024 * 1024,
             redact = { if (it == "expand") "\\".repeat(10_000) else it },
         )) { _, _, _ -> }
@@ -53,7 +52,7 @@ class StageOneRegressionTest {
     @Test fun largeUtf8RecordIsCompleteAndNextRecordRollsWithBoundedOutputChunks() = runBlocking {
         val root = Files.createTempDirectory("logger-large").toFile()
         val chunks = mutableListOf<String>()
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), LogConfig(
+        val engine = LogEngine(File(root, "logs"), LogConfig(
             logcatMinLevel = LogLevel.INFO, maxFileBytes = 1024 * 1024, maxDirectoryBytes = 4 * 1024 * 1024,
         )) { _, _, text -> chunks += text }
         val message = "测😀[\n".repeat(120_000) + "END"
@@ -72,9 +71,7 @@ class StageOneRegressionTest {
             assertTrue(files.last().readText().endsWith("[Large] next\n"))
             assertEquals(0L, engine.status().truncated)
             assertEquals(2L, engine.status().written)
-            ZipFile((engine.export() as ExportResult.Success).file).use { zip ->
-                assertEquals(files.first().readText(), zip.getInputStream(zip.getEntry(files.first().name)).reader(Charsets.UTF_8).use { it.readText() })
-            }
+
         } finally { engine.close(); root.deleteRecursively() }
     }
 
@@ -104,7 +101,7 @@ class StageOneRegressionTest {
     @Test fun oversizedRecordDoesNotBackOffHealthyWriter() = runBlocking {
         val root = Files.createTempDirectory("logger-oversize").toFile()
         val recovery = FileRecovery { 0L }
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), config(), recovery) { _, _, _ -> }
+        val engine = LogEngine(File(root, "logs"), config(), recovery) { _, _, _ -> }
         try {
             engine.info("T", "before")
             engine.info("T", "x".repeat(4000))
@@ -116,31 +113,9 @@ class StageOneRegressionTest {
         } finally { engine.close(); root.deleteRecursively() }
     }
 
-    @Test fun exportFailuresAreCountedOnceAndCanRecover() = runBlocking {
-        for (blockedSource in listOf(false, true)) {
-            val root = Files.createTempDirectory("logger-export-error").toFile()
-            val logs = File(root, "logs")
-            val exports = File(root, "exports")
-            val blocked = if (blockedSource) logs else exports
-            blocked.writeText("occupied")
-            val engine = LogEngine(logs, exports, config()) { _, _, _ -> }
-            try {
-                assertTrue(engine.export() is ExportResult.Failure)
-                assertEquals(1L, engine.status().failed)
-                assertEquals("IllegalStateException", engine.status().lastError)
-                assertTrue(blocked.delete())
-                engine.info("T", "healthy")
-                engine.flush()
-                assertEquals(1L, engine.status().written)
-                assertTrue(engine.export() is ExportResult.Success)
-                assertEquals(1L, engine.status().failed)
-            } finally { engine.close(); root.deleteRecursively() }
-        }
-    }
-
     @Test fun boundedExceptionMessageIsRedactedAndPreservesFrames() = runBlocking {
         val root = Files.createTempDirectory("logger-message").toFile()
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), config().copy(
+        val engine = LogEngine(File(root, "logs"), config().copy(
             maxDirectoryBytes = 16384, redact = { it.replace("secret", "masked") },
         )) { _, _, _ -> }
         try {
@@ -172,7 +147,7 @@ class StageOneRegressionTest {
     @Test fun redactionFailureKeepsHealthyStreamAndBufferedRecords() = runBlocking {
         val root = Files.createTempDirectory("logger-redact-isolation").toFile()
         var pendingWasUnflushed = false
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), config().copy(redact = {
+        val engine = LogEngine(File(root, "logs"), config().copy(redact = {
             if (it == "bad") {
                 pendingWasUnflushed = File(root, "logs").listFiles()!!.none { file -> file.readText().contains("pending") }
                 throw IllegalArgumentException("redaction")
@@ -199,69 +174,12 @@ class StageOneRegressionTest {
         } finally { engine.close(); root.deleteRecursively() }
     }
 
-    @Test fun exportFlushFailureCountsOnceAndWriterRecovers() = runBlocking {
-        val root = Files.createTempDirectory("logger-export-flush").toFile()
-        var nanos = 0L
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), config(), FileRecovery { nanos }) { _, _, _ -> }
-        try {
-            engine.info("T", "before"); engine.flush()
-            replaceStream(engine) { original -> object : java.io.BufferedWriter(original) {
-                override fun flush() { throw java.io.IOException("injected") }
-            } }
-            assertEquals("IOException", (engine.export() as ExportResult.Failure).message)
-            assertEquals(1L, engine.status().failed)
-            assertEquals("IOException", engine.status().lastError)
-            nanos += 1_000_000_000L
-            engine.info("T", "after"); engine.flush()
-            assertEquals(2L, engine.status().written)
-            assertTrue(engine.export() is ExportResult.Success)
-            assertEquals(1L, engine.status().failed)
-        } finally { engine.close(); root.deleteRecursively() }
-    }
-
-    @Test fun archiveWriteAndPublishFailuresCountOnceCleanTempsAndRecover() = runBlocking {
-        for (failWrite in listOf(true, false)) {
-            val root = Files.createTempDirectory("logger-archive-io").toFile()
-            var inject = true
-            val engine = LogEngine(File(root, "logs"), File(root, "exports"), config(),
-                archiveOutput = { file ->
-                    if (inject && failWrite) object : java.io.OutputStream() {
-                        override fun write(value: Int) { throw java.io.IOException("injected") }
-                    } else file.outputStream()
-                },
-                publishArchive = { source, target -> if (inject && !failWrite) false else source.renameTo(target) },
-            ) { _, _, _ -> }
-            try {
-                engine.info("T", "retained"); engine.flush()
-                assertTrue(engine.export() is ExportResult.Failure)
-                assertEquals(1L, engine.status().failed)
-                assertEquals(if (failWrite) "IOException" else "IllegalStateException", engine.status().lastError)
-                assertTrue(File(root, "exports").listFiles()!!.isEmpty())
-                assertTrue(File(root, "logs").listFiles()!!.single().readText().contains("retained"))
-                inject = false
-                assertTrue(engine.export() is ExportResult.Success)
-                assertEquals(1L, engine.status().failed)
-            } finally { engine.close(); root.deleteRecursively() }
-        }
-    }
-
-    @Test fun emptyExportSucceedsWithoutAWriteAndDoesNotReportIoFailure() = runBlocking {
-        val root = Files.createTempDirectory("logger-empty").toFile()
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), config()) { _, _, _ -> }
-        try {
-            val archive = engine.export() as ExportResult.Success
-            ZipFile(archive.file).use { assertEquals(0, it.size()) }
-            assertEquals(0L, engine.status().failed)
-            assertTrue(engine.flush().isSuccessful)
-        } finally { engine.close(); root.deleteRecursively() }
-    }
-
     @Test fun absentStreamFlushDoesNotResetBackoffAndRealFlushRecovers() = runBlocking {
         val root = Files.createTempDirectory("logger-backoff").toFile()
         val directory = File(root, "logs").apply { writeText("occupied") }
         var nanos = 0L
         val recovery = FileRecovery { nanos }
-        val engine = LogEngine(directory, File(root, "exports"), config(), recovery) { _, _, _ -> }
+        val engine = LogEngine(directory, config(), recovery) { _, _, _ -> }
         try {
             engine.info("T", "failure1"); engine.flush() // 1 秒
             nanos += 1_000_000_000L
@@ -303,7 +221,7 @@ class StageOneRegressionTest {
         val directory = File(root, "logs").apply { writeText("occupied") }
         try {
             context.initialize {
-                LogEngine(directory, File(root, "exports"), config().copy(queueCapacity = 1, redact = {
+                LogEngine(directory, config().copy(queueCapacity = 1, redact = {
                     entered.countDown(); release.await(5, TimeUnit.SECONDS); it
                 })) { _, _, _ -> }
             }
@@ -325,9 +243,8 @@ class StageOneRegressionTest {
         val context = LoggingContext()
         try {
             context.initialize {
-                LogEngine(File(root, "logs"), File(root, "exports"), config().copy(redact = {
+                LogEngine(File(root, "logs"), config().copy(redact = {
                     assertFalse(runBlocking { context.flush() }.isSuccessful)
-                    assertTrue(runBlocking { context.export() } is ExportResult.Failure)
                     assertFalse(context.getLogger("Recursive").info { fail("Recursive lambda evaluated"); "never" })
                     it
                 })) { _, _, _ -> }
@@ -350,7 +267,7 @@ class StageOneRegressionTest {
         val output = mutableListOf<String>()
         try {
             context.initialize {
-                LogEngine(File(root, "logs"), File(root, "exports"), config().copy(
+                LogEngine(File(root, "logs"), config().copy(
                     fileMinLevel = LogLevel.WARN, logcatMinLevel = LogLevel.DEBUG,
                     redact = { it.replace("private", "masked") },
                 )) { _, _, body -> output += body }
@@ -374,7 +291,7 @@ class StageOneRegressionTest {
 
     @Test fun logcatFailureDoesNotPreventFileOutputOrSubsequentRecords() = runBlocking {
         val root = Files.createTempDirectory("logger-output-failure").toFile()
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), config().copy(logcatMinLevel = LogLevel.DEBUG)) {
+        val engine = LogEngine(File(root, "logs"), config().copy(logcatMinLevel = LogLevel.DEBUG)) {
             _, _, _ -> throw IllegalStateException("private")
         }
         try {

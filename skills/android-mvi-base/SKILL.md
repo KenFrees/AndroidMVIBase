@@ -22,7 +22,7 @@ description: Use when integrating AndroidMVIBase into a business Android project
 | 结果分支与回调 | [common README](../../common/README.md) |
 | Retrofit/Moshi/OkHttp、异常包装 | [network README](../../network/README.md) |
 | Compose 界面组件（Loading、Toast） | [UI 组件目录](../../ui/components/README.md) |
-| 本地诊断日志 | [logging README](../../logging/README.md)：Application.onCreate 调用 Logging.initialize，业务使用 Logging.getLogger(name) 缓存固定名称，所有等级支持可选 Throwable 和延迟正文，先判断等级和容量再执行 lambda；普通正文不截断，队列仅限条数；所有线程满时立即拒绝，不等待队列空间；单文件大小是滚动阈值，目录总预算独立生效；清理内部固定每小时检查，不公开 cleanupIntervalMillis；数值配置仅校验正数和必要关系，默认值仍建议优先使用；记录 true 不等于已写入；挂起刷新/导出，单目录单实例，正式环境配置等级和脱敏；非法日期格式回退默认，其他非法配置停用实例，通过初始化结果 enabled / warnings 查询，directory 为实际目录路径；初始化直接输出中文 Logcat 反馈，不受 logcatMinLevel 影响，成功不代表磁盘写入已验证；flush/export/close/status 由 Logging 统一管理；日志异常 message 每层最多保留 512 个 UTF-16 字符单元，与正文统一脱敏，脱敏失败只丢弃当前记录并保留健康文件流；单条超过总目录预算不触发磁盘退避。导出失败计入状态，取消继续传播；清理遗留文件失败也计入状态且不覆盖原始结果，已发布 ZIP 仍可返回 Success，必要时检查 status。 |
+| 本地诊断日志 | [logging README](../../logging/README.md)：Application.onCreate 调用 Logging.initialize，业务使用 Logging.getLogger(name) 缓存固定名称，所有等级支持可选 Throwable 和延迟正文，先判断等级和容量再执行 lambda；普通正文不截断，队列仅限条数；所有线程满时立即拒绝，不等待队列空间；单文件大小是滚动阈值，目录总预算独立生效；清理内部固定每小时检查，不公开 cleanupIntervalMillis；数值配置仅校验正数和必要关系，默认值仍建议优先使用；记录 true 不等于已写入；挂起刷新/文件查询，单目录单实例，正式环境配置等级和脱敏；非法日期格式回退默认，其他非法配置停用实例，通过初始化结果 enabled / warnings 查询，directory 为实际目录路径；初始化直接输出中文 Logcat 反馈，不受 logcatMinLevel 影响，成功不代表磁盘写入已验证；flush/logFiles/close/status 由 Logging 统一管理；日志异常 message 每层最多保留 512 个 UTF-16 字符单元，与正文统一脱敏，脱敏失败只丢弃当前记录并保留健康文件流；单条超过总目录预算不触发磁盘退避。logFiles(date) 在 IO 线程查询实际目录，返回 Result<List<File>>，支持日期筛选及从新到旧排序；无文件为空列表，读取失败返回 failure，取消传播。查询不刷新、不复制，文件可能追加、滚动重命名或清理；读取与复制由宿主处理。无 ZIP 导出。 |
 | Hilt 宿主与 Compose 示例入口 | [app README](../../app/README.md) |
 | 已实现范围与当前限制 | [项目总览](../../README.md)中的当前进度和限制；学习路线不约束接入方 |
 
@@ -54,12 +54,12 @@ Review 先列问题，给文件/行号、触发条件、影响和建议，再列
 
 说明业务侧用了哪些能力、如何调用、已验证什么、还受哪些限制。明确区分源码审查、构建、接口与设备验证；不自动提交、推送或改变业务工程之外的状态。
 
-日志库内部诊断：初始化配置 `isDebugLog = true` 后，各等级内部诊断全部直接输出到 Logcat（TAG 为 Logging），不受业务 `logcatMinLevel` 影响；默认 false，关闭时不构造诊断正文。覆盖配置检查、目录选择、后台启动、文件打开/滚动、文件清理、手动刷新、导出、关闭及内部错误，不输出业务正文。中文初始化最终结果仍始终输出，重复初始化保留首次配置。
+日志库内部诊断：初始化配置 `isDebugLog = true` 后，各等级内部诊断全部直接输出到 Logcat（TAG 为 Logging），不受业务 `logcatMinLevel` 影响；默认 false，关闭时不构造诊断正文。覆盖配置检查、目录选择、后台启动、文件打开/滚动、文件清理、手动刷新、关闭及内部错误，不输出业务正文。中文初始化最终结果仍始终输出，重复初始化保留首次配置。
 
 日志默认位置为 getExternalFilesDir(null)/logs（通常 /sdcard/Android/data/包名/files/logs），不需要存储权限；外部应用专属目录不可用时停用并报告初始化失败，不回退内部目录。备份排除需覆盖 external 域的日志子目录，保留 file 域规则以排除旧日志。
 
 携带 Throwable 时保留换行与制表缩进，堆栈采用异常标题、逐行 at 和 Caused by 格式；仍保留有界快照和统一脱敏，不保证完整 printStackTrace（省略超限帧和 suppressed）。多行记录的骤停修复仅移除未以换行结束的残尾，已写出的完整行可能属于不完整的异常记录。
 
-日志文件命名：每日未分片时为 yyyy-MM-dd.log；首次滚动时将其重命名为 yyyy-MM-dd-000000.log，新分片为 yyyy-MM-dd-000001.log，之后序号递增。兼容已有带序号文件，重启追加最新可写分片；清理和导出同时识别两种名称。重命名失败按文件 IO 失败处理，不覆盖原文件。
+日志文件命名：每日未分片时为 yyyy-MM-dd.log；首次滚动时将其重命名为 yyyy-MM-dd-000000.log，新分片为 yyyy-MM-dd-000001.log，之后序号递增。兼容已有带序号文件，重启追加最新可写分片；清理和查询同时识别两种名称。重命名失败按文件 IO 失败处理，不覆盖原文件。
 
 日志清理与写入使用同一实际配置目录；接入测试应从 LogInitialization.directory 获取路径，不硬编码内部 filesDir/logs。库内部错误诊断提供中文操作上下文和异常类型，不输出异常 message 或业务正文，关闭失败不会显示成功提示。

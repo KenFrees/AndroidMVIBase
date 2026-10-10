@@ -20,7 +20,7 @@ enum class LogLevel { DEBUG, INFO, WARN, ERROR }
  * @param discardingThreshold 剩余槽数小于阈值时拒绝 DEBUG/INFO；null 使用 queueCapacity / 5，0 禁用提前丢弃。
  * 显式值范围为 0–queueCapacity；队列满时所有等级都拒绝且不等待空间。
  * @param maxFileBytes 单文件滚动阈值，单位字节，默认 2 MiB，必须大于 0；完整记录可使文件超限，下一条记录前滚动。
- * @param maxDirectoryBytes 日志文件总字节预算，默认 20 MiB，必须大于 0 且不少于单文件；不含导出 ZIP、快照和未知文件。
+ * @param maxDirectoryBytes 日志文件总字节预算，默认 20 MiB，必须大于 0 且不少于单文件；不含未知文件。
  * 活动文件受保护；单条编码后超过总预算或无法清理出空间时报告文件写入失败，不截断正文。
  * @param retentionDays 保留最近多少个日历日，默认 7，必须大于 0；按 zoneId 计算，保护当前活动文件。
  * @param flushIntervalMillis 缓冲刷新间隔，单位毫秒，默认 1000，必须大于 0；不做 fsync，骤停仍可能丢失日志。
@@ -72,7 +72,7 @@ data class LogConfig(
  * @param dropped 未启用、关闭、容量或准备失败等拒绝数；等级过滤不计。
  * @param truncated 已接受记录的截断数，仅涵盖 TAG 和有界异常快照，普通正文不截断，每条最多一次。
  * @param written 追加到文件缓冲成功数，不含仅 Logcat 输出；不代表刷新或 fsync。
- * @param failed 失败操作和跳过文件记录数，包含回调、磁盘、清理、退避、导出等；非独立失败日志条数。
+ * @param failed 失败操作和跳过文件记录数，包含回调、磁盘、清理、退避等；非独立失败日志条数。
  * @param lastError 最近报告的错误类型，不保存异常对象或敏感原文；恢复成功不清除历史错误。
  */
 data class LogStatus(
@@ -86,11 +86,3 @@ data class LogStatus(
 
 /** 刷新/关闭结果；成功不代表之前丢弃或失败的记录可以恢复，也不代表 fsync。 */
 data class FlushResult(val isSuccessful: Boolean, val status: LogStatus)
-
-/** 导出成功返回 ZIP；失败提供有界错误信息，不删除原日志。临时文件清理失败计入状态，不改变已发布 ZIP 的成功结果。 */
-sealed interface ExportResult {
-    /** 可自动清理的缓存 ZIP，宿主需要及时分享或另存。 */
-    data class Success(val file: java.io.File) : ExportResult
-    /** 有界诊断原因，不携带原始日志内容。 */
-    data class Failure(val message: String) : ExportResult
-}
