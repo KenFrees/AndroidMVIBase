@@ -229,3 +229,59 @@ API 26 和 37 没有运行证据，当前 SDK/AVD 未安装对应系统镜像。
 证据位于 `app/build/release-verification/before-restart`、`after-restart` 和 `restart-comparison.txt`；最终构建的新异常重新提取并用对应 mapping 成功还原至 LogDemoChecks.kt:23 / LogDemoScreen.kt:155。旧异常与旧 mapping 的首轮结果仍是历史记录。
 
 边界：刷新完成后停止进程验证的是已刷新日志与重新追加；未刷新数据丢失、半条记录中断及断电仍按既有边界处理。清理使用独立过期夹具，没有改设备系统时间，也没有删除未知文件。本轮没有再次执行小时/天级长稳或跨版本测试；新增演示入口只按当前宿主默认配置验收。
+
+## 跨版本兼容性验收（2026-10-10）
+
+使用同一份本地测试签名、非 debuggable、R8 优化的最终 release APK（mapping id `cb3e6a38240b88790988b0e5f65d262279fc38664a96771494e04230609fb4c9`），通过 Android CLI 和 ADB 自动操作页面及核对实际文件。本轮没有修改日志库生产代码，也没有重新构建 APK。
+
+| 系统 / 环境 | LoggerDeviceTest | 独立包强停恢复 | 优化 release 页面及文件核对 |
+| --- | --- | --- | --- |
+| API 26 / AOSP x86_64 模拟器 | 5/5 | 1/1 | 通过，768/768 |
+| API 30 / AOSP x86_64 模拟器 | 5/5 | 1/1 | 通过，768/768 |
+| API 35 / DAYU_A6 实机 | 此前 5/5 | 此前 1/1 | 本轮脚本复验通过，768/768 |
+| API 37 / Google APIs x86_64 模拟器 | 5/5 | 1/1 | 通过，768/768 |
+
+release 检查包含初始化反馈、同名 Logger 复用、默认等级过滤、INFO/WARN/ERROR 正文及多行异常 6/6、约 3 MiB 写入分片、独立过期夹具清理；刷新后 force-stop 示例 app 并重启，再次接入检查 6/6。脚本独立核对编号 0..767 无缺失/重复，每条载荷均为 4096 个 x；重启追加后原有日志字节前缀保持一致。各轮匹配分片数量受已有当日日志位置影响，不要求固定为两片。
+
+复现脚本与前提见 [README.md](README.md#跨版本-release-自动验收)。设备回归使用已构建的独立测试 APK，命令为：
+
+```text
+adb -s <serial> shell am instrument -w -e class com.ttxz.base.logging.LoggerDeviceTest com.ttxz.base.logging.test/androidx.test.runner.AndroidJUnitRunner
+powershell -File logging/scripts/verify-force-stop.ps1 -Serial <serial>
+python logging/scripts/verify-release-device.py --serial <serial> --output logging/build/cross-version/<新的目录>
+```
+
+API 30 首次 release 页面检查成功，但普通 ADB shell 拉取 Android/data 被系统拒绝；在本次专用模拟器启用 root ADB 后完整重跑通过。API 37 同样使用脚本的 `--root-emulator`；API 26 和实机未启用 root。模拟器 root 仅用于测试端拉取文件，应用仍以普通 UID 运行；不能据此声称业务可跨应用直接读取隔离目录。三个本次创建的模拟器均已停止，SDK 镜像和 AVD 保留供复验。
+
+本地原始结果：`logging/build/cross-version/api26-release/result.json`、`api30-release-root/result.json`、`api35-script-check-v2/result.json`、`api37-release/result.json`；各版本 `apiXX-instrumentation.txt`、`apiXX-force-stop.txt` 保存对应测试报告，before/after 保存文件副本。以上均为忽略的构建产物，不提交日志正文。
+
+边界：覆盖 API 26、30、35、37 四个版本点，不代表所有 Android 版本或厂商 ROM；API 29 未单独测试。模拟器兼容性结果不是实机性能指标，本轮未重复吞吐量压测。模拟器小时级长稳见下节；实机小时级、天级长稳、物理磁盘耗尽、断电持久性及正式发布签名仍未验收。此前文档中的“跨版本待验收”为当时历史状态，以本节覆盖范围为准。
+
+## 长稳用例及验收（2026-10-10）
+
+新增显式启用的 `LoggerSoakDeviceTest`，未传 soakMinutes 时跳过。固定小批次持续在真实主线程提交，使用默认队列、分片及目录预算；只关闭业务 Logcat，写入随机独立测试目录。每轮刷新后验证本轮全部 6000 条正文无缺失/重复、累计接受与写入一致、拒绝和失败为 0、目录大小不超过预算；20 轮及以上额外验证滚动与已编号旧文件清理。使用每轮固定大小标记和有界堆样本，避免验收端持有整场日志。
+
+执行本轮时没有 ADB 实机连接，使用已有 API 37 / Google APIs x86_64 模拟器。首次 1 轮短程校验 `OK (1 test)`，JUnit 61.962 秒；提交及校验阶段约 61.493 秒，6000 条全部接受并写入，拒绝和失败 0，正文核对通过。目录 2,025,668 字节；Java 堆基线 2,202,608 字节，GC 后 2,218,992 字节，增长 16,384 字节；每批次后采样峰值 2,874,352 字节；最大提交耗时 3063 微秒。此短程未触发滚动或清理，不能当作长稳通过。
+
+用例构建与 logging lint 通过。同一模拟器上的 soakMinutes=60 测试已完成，最终同时出现 `LOGGER_SOAK_PASS` 和 `OK (1 test)`；JUnit 实际耗时 3707.991 秒，约 61 分 48 秒。每分钟指标及最终报告保存在本地 `logging/build/soak-60-minutes.txt`。复现方式和边界见 [README.md](README.md#显式长稳测试)。原始短程报告 `logging/build/soak-smoke.txt`；指标另由 Logcat 的 LOGGER_SOAK 输出确认。新版用例同时通过 instrumentation stream 输出指标，方便直接保存。
+
+这些是模拟器上的独立测试包结果，不是优化 release 或实机一小时性能证据。强制 GC 每轮进行，峰值约每批采样，不能证明没有短时尖峰；保留堆增长断言阈值为 16 MiB，实际变化须结合输出判断。测试清理仅限自身随机目录，不影响示例 app 的日志。
+
+
+60 轮最终指标：
+
+| 指标 | 实测结果 |
+| --- | --- |
+| 提交 / 接受 / 写入 | 360000 / 360000 / 360000 |
+| 拒绝 / 失败 | 0 / 0 |
+| 正文完整性 | 每轮最近 6000 条编号、正文及重复检查通过 |
+| 分片 / 已编号旧文件容量清理 | 均已触发，通过 |
+| 每轮采样目录最大值 | 20966060 字节，低于 20 MiB（20971520 字节） |
+| Java 堆基线 | 2206704 字节 |
+| GC 后保留堆最大增长 | 135184 字节，约 132 KiB |
+| 每批次后采样堆峰值 | 3013632 字节，约 2.87 MiB |
+| 最大单次提交耗时 | 45681 微秒，约 45.7 ms，包含正文构造 |
+
+每轮正文检查在正常容量清理前覆盖该轮全部记录，不代表 36 万条最终全部保留；更早分片按默认预算删除。目录峰值按每轮检查采样，非逐次写入观测。第 22 轮开始记录到上述提交耗时峰值，测试没有采集线程调度或 GC trace，无法确定是日志处理、GC 还是模拟器调度，保留为后续实机性能定位项，不能宣称无偶发卡顿。本轮不设延迟通过阈值，成功结论仅覆盖断言验证的完整性、容量和保留堆边界。
+
+收尾核对报告后关闭本次 codex-logging-api37 模拟器，保留 SDK 镜像和 AVD 供复验。历史章节中的待验收描述表示当时状态，以本节及跨版本验收覆盖范围为准。

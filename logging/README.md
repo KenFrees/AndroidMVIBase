@@ -200,7 +200,7 @@ Logback 的 [LoggerContext](https://github.com/tony19/logback-android/blob/main/
 
 ## 持续写入与生命周期复验（2026-10-10）
 
-新增连续 4 天的分片、关闭重开和 2 天保留期组合测试；57 项 JVM 测试及 lint 通过。Android 15 上 4 项压力设备测试、30 万次含异常提交及独立测试包强杀恢复通过。本轮最高零拒绝档仍为 2000 条/秒（每档 10 秒、100 ms 批次），不能当作通用性能上限；更高档位会拒绝。采样 Java 堆峰值约 8.71 MiB，30 万次提交后保留堆最大增长约 104 KiB。详细条件、数据和边界见 [VERIFICATION.md](VERIFICATION.md#持续写入与生命周期复验2026-10-10)。小时或天级长稳、跨版本及 R8 仍未完成。
+新增连续 4 天的分片、关闭重开和 2 天保留期组合测试；57 项 JVM 测试及 lint 通过。Android 15 上 4 项压力设备测试、30 万次含异常提交及独立测试包强杀恢复通过。本轮最高零拒绝档仍为 2000 条/秒（每档 10 秒、100 ms 批次），不能当作通用性能上限；更高档位会拒绝。采样 Java 堆峰值约 8.71 MiB，30 万次提交后保留堆最大增长约 104 KiB。详细条件、数据和边界见 [VERIFICATION.md](VERIFICATION.md#持续写入与生命周期复验2026-10-10)。该轮尚未完成的跨版本、R8 及小时级长稳已在下文补验；天级长稳仍待验收。
 
 ## R8 与混淆后的诊断
 
@@ -214,6 +214,35 @@ java -cp <包含 Retrace 的 R8 或 SDK d8.jar> com.android.tools.r8.retrace.Ret
 
 `stack.txt` 提取文件中的异常标题和逐行 `at`/`Caused by`，不包含日志日期/TAG 前缀。日志库使用有界异常快照，Retrace 只能还原已记录的帧，无法恢复被省略的信息。`getLogger(SomeClass::class.java)` 的 TAG 可能变成混淆类名；需要跨版本稳定标识时使用 `getLogger("ModuleName")`，无需为此保留整个业务类。
 
-release 安装、签名及 mapping 归档由宿主负责。没有发布证书的本地测试签名不能用于正式分发。跨版本、小时/天级长稳及真实磁盘耗尽仍待验收。
+release 安装、签名及 mapping 归档由宿主负责。没有发布证书的本地测试签名不能用于正式分发。跨版本及模拟器小时级长稳结果见下文；实机小时级、天级长稳及真实磁盘耗尽仍待验收。
 
 优化 release 生命周期补验：app 日志页提供显式的约 3 MiB 分片/清理检查，API 35 上 768 条唯一记录跨两片、过期夹具清理通过；刷新后终止进程并重启，历史字节不变、新写入成功，最终 mapping 再次还原堆栈。此入口按示例默认配置设计，详细条件见 [VERIFICATION.md](VERIFICATION.md#优化-release-分片清理与重启补验)。
+
+## 跨版本 release 自动验收
+
+脚本 [verify-release-device.py](scripts/verify-release-device.py) 通过 Android CLI 操作示例日志页，再用 ADB 拉取文件核对。先安装与当前源码一致、经过 R8 优化且非 debuggable 的本地测试签名 release APK；需 Python 3.11+、adb 和 android CLI 在 PATH。脚本不负责构建、签名或安装。
+
+```text
+python logging/scripts/verify-release-device.py --serial <设备序列号> --output logging/build/cross-version/<新的结果目录>
+```
+
+它保留应用数据，强停示例 app 两次，写入约 3 MiB 日志，检查等级/堆栈、分片、过期夹具清理，以及重启后 768 条完整正文和历史文件前缀。结果与文件副本保存在指定的新目录；已有目录会拒绝使用，避免混入旧结果。默认配置之外的目录预算或保留期不适用该示例验收。
+
+Android 存储隔离可能禁止普通 ADB shell 拉取 Android/data。仅在专用、支持 root ADB 的测试模拟器上可加 `--root-emulator`，脚本会检查模拟器序列号及 qemu 标识后启用 root ADB；不能用于真实设备。脚本不会清空应用数据，但会触发当前日志配置的正常过期及容量清理。测试结果不能代表断电持久性、小时/天级长稳或所有设备的性能。
+
+2026-10-10 跨版本补验：API 26、30、37 模拟器各通过 5 项设备回归、1 项强停恢复，以及优化 release 的接入/分片/清理/重启文件核对；API 35 实机本轮自动脚本复验通过。每轮独立核对 768 条完整正文、历史字节前缀和重启后追加。只覆盖这四个版本点，未覆盖全部 ROM 或长期性能；详细证据和存储隔离测试条件见 [VERIFICATION.md](VERIFICATION.md#跨版本兼容性验收2026-10-10)。
+
+## 显式长稳测试
+
+`LoggerSoakDeviceTest` 默认跳过，必须传 `soakMinutes=1..1440`。先构建并安装独立测试 APK，再运行：
+
+```text
+adb -s <serial> install -r logging/build/outputs/apk/androidTest/debug/logging-debug-androidTest.apk
+adb -s <serial> shell am instrument -w -e class com.ttxz.base.logging.LoggerSoakDeviceTest -e soakMinutes 60 com.ttxz.base.logging.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+固定每 100 ms 一批 10 条，不追赶迟到批次，1% 记录带异常；每轮提交 6000 条后刷新，逐行核对本轮编号、正文和重复情况，并检查拒绝/失败计数及默认 20 MiB 目录预算。20 轮以上还要求实际发生分片和已编号旧文件清理。每轮扫描、GC 与主线程调度会增加耗时，60 轮实际超过一小时，不应按总时长推导严格 100 条/秒。测试采用独立随机目录，正常结束或断言失败后关闭引擎并删除该目录；直接杀死测试进程可能留下目录。
+
+输出每轮接受/拒绝/失败、目录字节、GC 后保留堆、每批次后的采样堆峰值和最大提交耗时。内存中只保留当前轮 6000 个布尔标记与至多 1441 个堆样本；不保存整场正文或逐条延迟。强制 GC 的保留堆和约 100 ms 粒度的采样峰值不能代表自然 GC 行为或瞬时最高内存。最终须同时看到 `LOGGER_SOAK_PASS` 与 `OK (1 test)` 才算该场测试通过。
+
+长稳补验已完成：API 37 模拟器连续 60 轮，JUnit 实际 3707.991 秒；36 万条每轮正文核对通过，拒绝/失败均为 0，分片和容量清理通过。GC 后保留堆最大增长 135184 字节（约 132 KiB），采样峰值约 2.87 MiB。最大单次提交 45.681 ms（包括正文构造），原因未定位，不构成无卡顿保证。完整指标与限制见 [VERIFICATION.md](VERIFICATION.md#长稳用例及验收2026-10-10)。
