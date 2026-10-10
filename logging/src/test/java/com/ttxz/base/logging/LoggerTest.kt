@@ -25,13 +25,30 @@ class LoggerTest {
             assertTrue(logger.flush().isSuccessful)
             val lines = File(root, "logs").listFiles()!!.single().readLines()
             assertEquals(2, lines.size)
-            assertTrue(lines[0].matches(Regex("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3} \\[.*")))
+            assertTrue(lines[0].matches(Regex("\\[\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}\\.\\d{3}\\] \\[I\\] \\[.*")))
             assertTrue(lines[0].endsWith("[A\\]\\nB] first\\nforged"))
             assertTrue(lines[1].endsWith("[A] second"))
             assertTrue(logger.close().isSuccessful)
             repeat(10) { assertFalse(logger.info("A", "after close")) }
             assertEquals(10L, logger.status().dropped)
             assertTrue(logger.close().isSuccessful)
+        } finally { logger.close(); root.deleteRecursively() }
+    }
+
+    @Test fun everyLevelIsWrittenBeforeTag() = runBlocking {
+        val root = Files.createTempDirectory("logger-level").toFile()
+        val logger = LogEngine(root, config().copy(fileMinLevel = LogLevel.DEBUG)) { _, _, _ -> }
+        try {
+            assertTrue(logger.debug("Module", "debug"))
+            assertTrue(logger.info("Module", "info"))
+            assertTrue(logger.warn("Module", "warn"))
+            assertTrue(logger.error("Module", "error"))
+            assertTrue(logger.flush().isSuccessful)
+            val lines = root.listFiles()!!.single().readLines()
+            assertEquals(4, lines.size)
+            LogLevel.entries.forEachIndexed { index, level ->
+                assertTrue(lines[index].endsWith(" [${"DIWE"[index]}] [Module] ${level.name.lowercase()}"))
+            }
         } finally { logger.close(); root.deleteRecursively() }
     }
 
@@ -96,7 +113,7 @@ class LoggerTest {
                 assertEquals(listOf("datePattern"), logger.configurationWarnings)
                 assertTrue(logger.info("T", "fallback"))
                 assertTrue(logger.flush().isSuccessful)
-                assertTrue(File(root, "logs").listFiles()!!.single().readText().matches(Regex("\\d{4}-\\d{2}-\\d{2} .*\\[T] fallback\\n")))
+                assertTrue(File(root, "logs").listFiles()!!.single().readText().matches(Regex("\\[\\d{4}-\\d{2}-\\d{2} .*\\] \\[I\\] \\[T] fallback\\n")))
             } finally { logger.close(); root.deleteRecursively() }
         }
         assertEquals("", escaped("😀", 1))

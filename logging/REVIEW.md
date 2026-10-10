@@ -19,7 +19,7 @@
 | 机制 | xLog | logback-android | 当前实现与决定 |
 | --- | --- | --- | --- |
 | 队列与丢弃 | FilePrinter 使用未指定容量的 LinkedBlockingQueue | AsyncAppenderBase 默认 256 条，默认丢弃阈值为容量的 1/5；neverBlock 可选择 offer | 256 个槽位包括准备、排队和消费；低等级提前丢弃，满时所有等级拒绝，调用者不等磁盘 |
-| 输出格式 | Flattener 可定义输出 | Encoder/Layout 可定义输出 | 固定日期时间、TAG、正文；仅开放日期格式，保护业务约定 |
+| 输出格式 | Flattener 可定义输出 | Encoder/Layout 可定义输出 | 固定日期时间、等级、TAG、正文；仅开放日期格式，保护业务约定 |
 | 写入与刷新 | SimpleWriter 使用字符缓冲并逐条 flush | OutputStreamAppender 先编码为 byte[]，默认 immediateFlush | 明确 UTF-8，分块转义与编码，定时/显式刷新；普通正文完整保留，避免整条转义副本与字节数组 |
 | 滚动 | 写入前检查备份策略 | RollingFileAppender 和大小触发策略在追加前决定滚动 | 大小为滚动阈值，完整记录可超阈值，下一条滚动；目录总预算另外约束 |
 | 配置与错误 | Builder 补默认策略，Writer 捕获常见 IO 异常 | Appender 配置失败不启动，IO 错误进入状态系统，流关闭错误也报告 | 非法日期回退，其他非法配置停用；内部计数记录错误，不递归输出内部日志；磁盘故障退避，正文处理失败只影响当前记录 |

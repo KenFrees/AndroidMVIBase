@@ -33,7 +33,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * 应用级诊断日志。普通记录调用无磁盘 IO、不等待队列空间；返回 true 仅表示接受。
- * 文件行固定为「日期时间 [TAG] 内容」，字段和异常只能出现在内容区域。
+ * 文件行固定为「[日期时间] [等级字母] [TAG] 内容」，字段和异常只能出现在内容区域。
  * 每个目录只能有一个实例/进程；宿主在应用生命周期内复用实例，不随页面创建。
  */
 internal class LogEngine(
@@ -253,7 +253,7 @@ internal class LogEngine(
                                 failed.incrementAndGet()
                             } else {
                                 try {
-                                    files.write(command.time, "${formatter.format(Instant.ofEpochMilli(command.time))} [${command.tag}] ", parts, suffix, preserveLayout = command.exceptionText.isNotEmpty())
+                                    files.write(command.time, "[${formatter.format(Instant.ofEpochMilli(command.time))}] [${command.level.name.first()}] [${command.tag}] ", parts, suffix, preserveLayout = command.exceptionText.isNotEmpty())
                                     written.incrementAndGet()
                                 } catch (error: LogRecordTooLargeException) { report("检查单条日志存储预算", error) }
                                 catch (error: Exception) { fileFailure("写入或滚动日志文件", error) }
