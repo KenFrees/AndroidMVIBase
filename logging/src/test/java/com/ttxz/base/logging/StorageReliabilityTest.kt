@@ -169,4 +169,37 @@ class StorageReliabilityTest {
         } finally { engine.close(); root.deleteRecursively() }
     }
 
+    @Test fun repeatedRollReopenAndDayChangesRetainExactlyTheConfiguredDays() {
+        val root = Files.createTempDirectory("log-lifecycle-days").toFile()
+        val files = LogFiles(root, config().copy(maxFileBytes = 64, maxDirectoryBytes = 8192, retentionDays = 2))
+        val first = java.time.LocalDate.parse("2026-10-10")
+        val expected = linkedMapOf<java.time.LocalDate, List<String>>()
+        try {
+            repeat(4) { offset ->
+                val day = first.plusDays(offset.toLong())
+                val time = day.atStartOfDay(ZoneId.of("UTC")).toInstant().toEpochMilli()
+                val records = (0 until 24).map { "$day record=$it payload" }
+                records.forEachIndexed { index, record ->
+                    if (index == 12) { files.flush(); files.close() }
+                    files.write(time + index, record)
+                }
+                files.flush()
+                files.cleanup(time)
+                expected[day] = records
+                expected.keys.removeAll { it < day.minusDays(1) }
+                val retained = root.listFiles()!!.filter { it.extension == "log" }
+                assertTrue(retained.any { it.name.startsWith("$day-") })
+                assertEquals(expected.keys, retained.map { java.time.LocalDate.parse(it.name.take(10)) }.toSet())
+                val lines = retained.flatMap { file ->
+                    assertTrue(file.readText().endsWith("\n"))
+                    file.readLines()
+                }
+                val wanted = expected.values.flatten()
+                assertEquals(wanted.size, lines.size)
+                assertEquals(wanted.toSet(), lines.toSet())
+                assertTrue(retained.sumOf { it.length() } <= 8192)
+            }
+        } finally { files.close(); root.deleteRecursively() }
+    }
+
 }

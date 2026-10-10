@@ -197,3 +197,7 @@ Logback 的 [LoggerContext](https://github.com/tony19/logback-android/blob/main/
 验证命令：`./gradlew.bat :logging:testDebugUnitTest :logging:lintDebug --console=plain`，56 项 JVM 测试全部通过，logging lint 通过。首轮队列用例因未启用 DEBUG 导致拒绝计数预期错误，已显式启用全部等级后重新通过。
 
 边界：目录预算不是设备物理剩余空间；SecurityException 为列举阶段注入，不代表 Android 挂载权限实测。此前目录占用/重开故障测试继续通过。本轮未填满真实磁盘、改变真实目录权限，已补跑 5 项 Android 15 设备回归及页面接入检查，结果见 [VERIFICATION.md](VERIFICATION.md)。长时间运行、跨版本或 R8 测试仍待验收。
+
+## 持续写入与生命周期复验（2026-10-10）
+
+新增连续 4 天的分片、关闭重开和 2 天保留期组合测试；57 项 JVM 测试及 lint 通过。Android 15 上 4 项压力设备测试、30 万次含异常提交及独立测试包强杀恢复通过。本轮最高零拒绝档仍为 2000 条/秒（每档 10 秒、100 ms 批次），不能当作通用性能上限；更高档位会拒绝。采样 Java 堆峰值约 8.71 MiB，30 万次提交后保留堆最大增长约 104 KiB。详细条件、数据和边界见 [VERIFICATION.md](VERIFICATION.md#持续写入与生命周期复验2026-10-10)。小时或天级长稳、跨版本及 R8 仍未完成。

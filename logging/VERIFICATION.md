@@ -185,3 +185,25 @@ API 26 和 37 没有运行证据，当前 SDK/AVD 未安装对应系统镜像。
 通过 phone-harness Skill 操作已连接 DAYU_A6（API 35）：再次运行接入检查，应用累计接受/写入从 9/9 增至 12/12，拒绝与失败均为 0；DEBUG 过滤，INFO/WARN/ERROR 正文与多行异常核对 6/6。文件查询返回实际外部应用目录下的 2026-10-10.log，有限预览显示原有异常换行。
 
 `:logging:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.ttxz.base.logging.LoggerDeviceTest` 通过，覆盖外部存储不可用、公共 Logger 复用、UTF-8 大记录、目录/分片/多行堆栈、主线程提交及重开，共 5 项设备测试。此次新增的预算和查询故障注入仍是 JVM 证据，未宣称在设备上复现真实磁盘耗尽或权限变化。未进行按钮闪烁逐帧测量、长时间运行或其他版本验证。
+
+## 持续写入与生命周期复验（2026-10-10）
+
+新增 `StorageReliabilityTest.repeatedRollReopenAndDayChangesRetainExactlyTheConfiguredDays`：模拟连续 4 个 UTC 日期，每天 24 条、多次 64 字节阈值分片，中途刷新并关闭重开；逐日校验保留期 2 天内的全部记录无缺失或重复、行末完整、过期日期移除及总量不超预算。无需修改设备时间。
+
+57 项 JVM 回归和 logging lint 通过。Android 15 / DAYU_A6 上 `LoggerStressDeviceTest` 4 项设备测试通过（慢消费者并发大正文、主线程满队列拒绝、持续提交、分档速率），另以 `stressRounds=30, stressWithThrowable=true` 运行 30 万次提交通过。生产代码未改。
+
+| 到达速率（每 100 ms 一批，每档 10 秒） | 接受 | 拒绝 |
+| --- | ---: | ---: |
+| 1000 条/秒 | 10000 | 0 |
+| 1500 条/秒 | 15000 | 0 |
+| 2000 条/秒 | 20000 | 0 |
+| 2500 条/秒 | 23165 | 1835 |
+| 3000 条/秒 | 23014 | 6986 |
+
+速率档测试核对已接受记录的唯一标识与正文；采样 Java 堆峰值 9,133,072 字节（约 8.71 MiB），各档 GC 后保留堆与基线相同或相差 16 字节。2000 条/秒仍只是本机本轮最高零拒绝测试档位，不是所有设备或正文形态的性能保证。
+
+30 万次主线程饱和提交：接受 146516，拒绝 153484，接受与写入计数一致，文件失败 0；p95 43 微秒，最大 19267 微秒，提交阶段约 43.1 秒。GC 后保留堆基线 4,754,384 字节、最高 4,860,896 字节，最大增长 106,512 字节（约 104 KiB）。398,730,368 字节为累计分配量，不是同时驻留内存。该实验启用默认 20 MiB 目录清理，不能据写入计数宣称所有历史记录仍保留在磁盘。
+
+运行 `logging/scripts/verify-force-stop.ps1 -Serial 3127RH1010015919`，仅强杀独立 logging 测试包；进入 READY 后执行停止，再启动恢复测试，`OK (1 test)`。已刷新多行异常保留、等待消费者的记录未写入、重启新记录成功。它不验证断电持久性或异常多行原子性；残尾修复由 JVM 及已有设备重开用例覆盖。
+
+以上为分钟内的持续与饱和压力复验，不是小时/天级长稳。其他 Android 版本、R8、真实磁盘耗尽仍待验收。原始设备指标见 `build/outputs/androidTest-results/connected/debug`（本地构建产物），30 万次与强杀记录见 `build/stage2`。
