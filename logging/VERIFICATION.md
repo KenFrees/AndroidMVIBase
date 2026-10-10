@@ -207,3 +207,25 @@ API 26 和 37 没有运行证据，当前 SDK/AVD 未安装对应系统镜像。
 运行 `logging/scripts/verify-force-stop.ps1 -Serial 3127RH1010015919`，仅强杀独立 logging 测试包；进入 READY 后执行停止，再启动恢复测试，`OK (1 test)`。已刷新多行异常保留、等待消费者的记录未写入、重启新记录成功。它不验证断电持久性或异常多行原子性；残尾修复由 JVM 及已有设备重开用例覆盖。
 
 以上为分钟内的持续与饱和压力复验，不是小时/天级长稳。其他 Android 版本、R8、真实磁盘耗尽仍待验收。原始设备指标见 `build/outputs/androidTest-results/connected/debug`（本地构建产物），30 万次与强杀记录见 `build/stage2`。
+
+## R8 release 接入验收（2026-10-10）
+
+- 配置：app 标准 release 的 `optimization.enable` 从 false 改为 true；AGP 9.4.0、R8 9.4.14，默认 Android 优化规则自动纳入；没有新增构建类型、日志整包 keep 或发布签名配置。
+- `:app:assembleRelease :app:lintRelease` 通过，生成 首轮 unsigned APK（1,886,601 字节）、mapping/configuration/usage 等产物。mapping 标识 `91c12750fee9e7be750bd8ee798d3d9fc6f3ad06772059201238f7d651bf68b2`；Logging、Logger、LogEngine 映射为 y41、w41、m41，确认实际混淆。
+- 对该 unsigned APK 仅做本地测试签名，安装到 DAYU_A6 / Android 15。包 flags 没有 DEBUGGABLE，启动正常；phone-harness 操作日志页，缓存复用、等级过滤、接受/刷新、正文及多行异常核对 6/6、查询实际目录和有限预览通过。
+- 拉取实际日志到 `app/build/release-verification/logs`，提取新异常到 `stack-obfuscated.txt`。SDK 37.0.0 自带 d8.jar 的 Retrace 还原到 `LogDemoChecksKt.checkLogIntegration(LogDemoChecks.kt:23)` 和 `LogDemoScreen.kt:155`，输出见 `stack-retraced.txt`。这几个文件仅为本地构建产物，不提交。
+- 本轮生产日志代码未改，无需额外 logging consumer keep 规则。没有重跑 JVM 压力测试，因为仅改宿主 release 优化配置；此前 57 项 JVM 及独立设备生命周期结果仍单独记录。
+
+限制：本地签名验证不代表正式发布证书验收；此轮未测试 release 的网络等其他页面；分片/清理/重启已在下文补验。跨版本、小时/天级长稳及物理磁盘耗尽仍待验收。设备当前安装的是本地测试签名的优化 release；需要恢复 debug 时可正常构建安装 debug 版本。
+
+### 优化 release 分片、清理与重启补验
+
+在现有 app 日志页增加显式“分片与清理检查（写入约 3 MiB）”，所有写入与校验运行在 IO 线程，经公开 Logging API 分批提交和刷新，不改日志库配置或生产实现。每次使用唯一正文标识、固定 LogLifecycle TAG；过期夹具使用 createNewFile 防止覆盖已有路径，只在检查失败/取消时清理本次创建的夹具。
+
+最终 `:app:assembleRelease :app:lintRelease` 通过。最终 unsigned APK 1,887,485 字节，mapping id `cb3e6a38240b88790988b0e5f65d262279fc38664a96771494e04230609fb4c9`；与首轮 mapping 不可混用。本地测试签名后安装，phone-harness 在 Android 15 执行检查，768/768 条唯一记录分布在 2026-10-10-000000.log 和 2026-10-10-000001.log，过期夹具自动删除。
+
+检查完成后保存日志副本并 force-stop 示例 app，重启后再运行接入检查，6/6 通过。文件比对：000000 分片 2,100,405 字节完全不变；000001 原 1,138,048 字节的全部前缀不变，重启追加后为 1,141,548 字节。独立核对 768 条编号 0..767 无缺失/重复，每条载荷均为 4096 个 x。首个文件略超 2 MiB 是完整记录写入后下一条前滚动的既定行为。
+
+证据位于 `app/build/release-verification/before-restart`、`after-restart` 和 `restart-comparison.txt`；最终构建的新异常重新提取并用对应 mapping 成功还原至 LogDemoChecks.kt:23 / LogDemoScreen.kt:155。旧异常与旧 mapping 的首轮结果仍是历史记录。
+
+边界：刷新完成后停止进程验证的是已刷新日志与重新追加；未刷新数据丢失、半条记录中断及断电仍按既有边界处理。清理使用独立过期夹具，没有改设备系统时间，也没有删除未知文件。本轮没有再次执行小时/天级长稳或跨版本测试；新增演示入口只按当前宿主默认配置验收。

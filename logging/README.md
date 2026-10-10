@@ -201,3 +201,19 @@ Logback 的 [LoggerContext](https://github.com/tony19/logback-android/blob/main/
 ## 持续写入与生命周期复验（2026-10-10）
 
 新增连续 4 天的分片、关闭重开和 2 天保留期组合测试；57 项 JVM 测试及 lint 通过。Android 15 上 4 项压力设备测试、30 万次含异常提交及独立测试包强杀恢复通过。本轮最高零拒绝档仍为 2000 条/秒（每档 10 秒、100 ms 批次），不能当作通用性能上限；更高档位会拒绝。采样 Java 堆峰值约 8.71 MiB，30 万次提交后保留堆最大增长约 104 KiB。详细条件、数据和边界见 [VERIFICATION.md](VERIFICATION.md#持续写入与生命周期复验2026-10-10)。小时或天级长稳、跨版本及 R8 仍未完成。
+
+## R8 与混淆后的诊断
+
+当前实现不通过反射、JNI 或类名字符串加载日志内部类型，无需增加日志库整包 `-keep` 规则，也没有为验证新增 consumer-rules 文件。2026-10-10 标准 app release 开启 R8 后构建/lint 通过，日志核心类实际被改名，API 35 设备接入检查及文件读取通过。更多证据与范围见 [VERIFICATION.md](VERIFICATION.md#r8-release-接入验收2026-10-10)。这不替代宿主其他依赖所需的混淆规则。
+
+每次发布都应将最终 APK/AAB 与对应 `mapping.txt` 一起归档，堆栈还原必须使用同一构建的 mapping。宿主应保留默认优化规则及堆栈诊断信息，不额外删除源码/行号信息。使用 R8 Retrace：
+
+```text
+java -cp <包含 Retrace 的 R8 或 SDK d8.jar> com.android.tools.r8.retrace.Retrace <mapping.txt> <stack.txt>
+```
+
+`stack.txt` 提取文件中的异常标题和逐行 `at`/`Caused by`，不包含日志日期/TAG 前缀。日志库使用有界异常快照，Retrace 只能还原已记录的帧，无法恢复被省略的信息。`getLogger(SomeClass::class.java)` 的 TAG 可能变成混淆类名；需要跨版本稳定标识时使用 `getLogger("ModuleName")`，无需为此保留整个业务类。
+
+release 安装、签名及 mapping 归档由宿主负责。没有发布证书的本地测试签名不能用于正式分发。跨版本、小时/天级长稳及真实磁盘耗尽仍待验收。
+
+优化 release 生命周期补验：app 日志页提供显式的约 3 MiB 分片/清理检查，API 35 上 768 条唯一记录跨两片、过期夹具清理通过；刷新后终止进程并重启，历史字节不变、新写入成功，最终 mapping 再次还原堆栈。此入口按示例默认配置设计，详细条件见 [VERIFICATION.md](VERIFICATION.md#优化-release-分片清理与重启补验)。

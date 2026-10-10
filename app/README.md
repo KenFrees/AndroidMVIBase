@@ -61,7 +61,7 @@ Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显
 
 - 当前测试目录是模板示例，不覆盖业务网络、MVI 或真实用户流程。
 - Navigation Compose 目前只用于首页与演示页之间的导航；文章示例有具体 ViewModel，但尚无通用 MVI 基类。
-- 当前 Release 关闭优化，尚未完成正式发布验证。
+- 标准 release 已启用 R8 代码优化和资源压缩，日志接入在 API 35 实机通过；发布签名、网络/UI 全流程和跨版本验收仍未完成。
 - network 已修正取消传播；日志策略和环境地址配置仍待完善，详见该模块 README。
 - 已完成的 Debug 构建记录见 [项目 README](../README.md)，后续修改须提供本次验证结果。
 
@@ -78,3 +78,15 @@ Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显
 日志页执行刷新、查询或接入检查时会暂时禁用操作按钮以防重复触发，但保持按钮颜色；处理状态保留一行位置，避免快速完成时整页变灰闪烁或结果区域跳动。
 
 接入检查按固定 TAG 与正文标识组合核对，异常中出现相同标识不能替代正文；已启用等级有任意记录被拒绝时，最终显示未通过，即使其余记录已写入。
+
+## Release / R8 日志验证
+
+AGP 9.4 的 `release.optimization.enable = true` 使用默认 Android 优化规则并启用资源压缩；没有新增构建类型，也没有将 release 签名固定为 debug。执行 `./gradlew.bat :app:assembleRelease :app:lintRelease --console=plain`，默认产物为 `app/build/outputs/apk/release/app-release-unsigned.apk`，mapping 为 `app/build/outputs/mapping/release/mapping.txt`。
+
+2026-10-10：标准 release 构建与 lint 通过。仅为设备验证，用本地 debug 证书签署了构建目录内的 `app-release-local-test.apk`，它仍是不可调试、已 R8 优化的 release，不能作为发布签名方案。安装覆盖当前示例 app 后，phone-harness 在 Android 15 验证初始化、Logger 缓存、INFO/WARN/ERROR、DEBUG 过滤、刷新、文件查询与预览，正文/多行异常 6/6。实际混淆堆栈已用本次 mapping 还原到 LogDemoChecks.kt 和 LogDemoScreen.kt。
+
+只验收了日志页面，未据此声明网络示例或整个应用已完成 release 验收。已补验优化 APK 的 2 MiB 分片、过期测试文件清理和刷新后的强杀重启；实际数据见 logging/VERIFICATION.md。日志页面的文件读取会处理 IO 异常，但仍不提供稳定快照。
+
+“分片与清理检查（写入约 3 MiB）”专用于示例默认配置（2 MiB 分片、7 天保留）：分 24 批写入 768 条、每条 4096 字符载荷，每批刷新；IO 线程分块核对编号完整、无重复并跨至少两个文件。检查会创建一个独立的 2000 年过期测试文件，确认滚动期间自动清理；失败/取消时仅移除此轮创建的夹具。已写入的测试日志遵循正常保留与容量策略，不自动删除。退出页面可取消检查，已接受记录仍可能继续写入。宿主修改阈值或保留期后应同步调整该演示，不能将其视为任意配置的通用验收器。
+
+最终优化 release 已在 API 35 通过该检查，并在刷新后 force-stop/重启，通过新日志核对和历史文件字节比对。该实验不保证未刷新数据、断电持久性或异常多行原子性。

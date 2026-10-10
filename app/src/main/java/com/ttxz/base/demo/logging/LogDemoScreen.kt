@@ -159,6 +159,16 @@ fun LogDemoScreen(onBack: () -> Unit) {
                     } finally { busy = false; status = Logging.status() }
                 }
             }) { Text(stringResource(R.string.log_demo_check)) }
+            Button(colors = actionColors, enabled = !busy, onClick = {
+                busy = true
+                scope.launch {
+                    try { feedback = checkLogLifecycle() }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (error: Exception) {
+                        feedback = resources.getString(R.string.log_demo_lifecycle_failed, error.message ?: error.javaClass.simpleName)
+                    } finally { busy = false; status = Logging.status() }
+                }
+            }) { Text(stringResource(R.string.log_demo_lifecycle)) }
             Text(if (busy) stringResource(R.string.log_demo_busy) else " ")
             if (feedback.isNotEmpty()) Text(feedback)
             Text(stringResource(R.string.log_demo_status, status.accepted, status.written, status.dropped, status.failed))

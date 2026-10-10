@@ -42,4 +42,6 @@
     <string name="log_demo_date_invalid">日期格式错误，请输入 yyyy-MM-dd 的有效日期</string>
     <string name="log_demo_preview">预览查询结果中的最新文件</string>
     <string name="log_demo_check">运行接入检查</string>
+    <string name="log_demo_lifecycle">分片与清理检查（写入约 3 MiB）</string>
+    <string name="log_demo_lifecycle_failed">分片与清理检查未通过：%1$s</string>
 </resources>
