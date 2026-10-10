@@ -13,6 +13,26 @@ import org.junit.runner.RunWith
 /** 独立 library 测试宿主，验证真实 Android 文件 API，不操作示例 app 数据。 */
 @RunWith(AndroidJUnit4::class)
 class LoggerDeviceTest {
+    @Test fun unavailableExternalStorageReturnsFailureWithoutFallbackOrCrash() = runBlocking {
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        val unavailable = object : android.content.ContextWrapper(app) {
+            override fun getApplicationContext(): android.content.Context = this
+            override fun getExternalFilesDir(type: String?): File? = null
+        }
+        val context = LoggingContext()
+        try {
+            val result = context.initialize { LogEngine.create(unavailable) }
+            assertFalse(result.enabled)
+            assertNull(result.directory)
+            assertEquals(listOf("ExternalLogStorageUnavailableException"), result.warnings)
+            assertTrue(result.consoleMessage().contains("外部应用专属存储不可用"))
+            assertFalse(context.getLogger("Unavailable").error("ignored"))
+            assertEquals(1L, context.status().dropped)
+            assertFalse(context.flush().isSuccessful)
+            assertTrue(context.export() is ExportResult.Failure)
+        } finally { context.close(1000) }
+    }
+
     @Test fun publicFacadeCachesNamesAndSharesWriter() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val first = Logging.getLogger("PublicFacade")

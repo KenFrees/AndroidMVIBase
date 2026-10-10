@@ -22,7 +22,7 @@ description: Use when integrating AndroidMVIBase into a business Android project
 | 结果分支与回调 | [common README](../../common/README.md) |
 | Retrofit/Moshi/OkHttp、异常包装 | [network README](../../network/README.md) |
 | Compose 界面组件（Loading、Toast） | [UI 组件目录](../../ui/components/README.md) |
-| 本地诊断日志 | [logging README](../../logging/README.md)：Application.onCreate 调用 Logging.initialize，业务使用 Logging.getLogger(name) 缓存固定名称，所有等级支持可选 Throwable 和延迟正文，先判断等级和容量再执行 lambda；普通正文不截断，队列仅限条数，单文件大小是滚动阈值，目录总预算独立生效；清理内部固定每小时检查，不公开 cleanupIntervalMillis；数值配置仅校验正数和必要关系，默认值仍建议优先使用；记录 true 不等于已写入；挂起刷新/导出，单目录单实例，正式环境配置等级和脱敏；非法日期格式回退默认，其他非法配置停用实例，通过初始化结果 enabled / warnings 查询，directory 为实际目录路径；初始化直接输出中文 Logcat 反馈，不受 logcatMinLevel 影响，成功不代表磁盘写入已验证；flush/export/close/status 由 Logging 统一管理；日志异常 message 每层最多保留 512 个 UTF-16 字符单元，与正文统一脱敏，脱敏失败只丢弃当前记录并保留健康文件流；单条超过总目录预算不触发磁盘退避。导出失败计入状态，取消继续传播；清理遗留文件失败也计入状态且不覆盖原始结果，已发布 ZIP 仍可返回 Success，必要时检查 status。 |
+| 本地诊断日志 | [logging README](../../logging/README.md)：Application.onCreate 调用 Logging.initialize，业务使用 Logging.getLogger(name) 缓存固定名称，所有等级支持可选 Throwable 和延迟正文，先判断等级和容量再执行 lambda；普通正文不截断，队列仅限条数；所有线程满时立即拒绝，不等待队列空间；单文件大小是滚动阈值，目录总预算独立生效；清理内部固定每小时检查，不公开 cleanupIntervalMillis；数值配置仅校验正数和必要关系，默认值仍建议优先使用；记录 true 不等于已写入；挂起刷新/导出，单目录单实例，正式环境配置等级和脱敏；非法日期格式回退默认，其他非法配置停用实例，通过初始化结果 enabled / warnings 查询，directory 为实际目录路径；初始化直接输出中文 Logcat 反馈，不受 logcatMinLevel 影响，成功不代表磁盘写入已验证；flush/export/close/status 由 Logging 统一管理；日志异常 message 每层最多保留 512 个 UTF-16 字符单元，与正文统一脱敏，脱敏失败只丢弃当前记录并保留健康文件流；单条超过总目录预算不触发磁盘退避。导出失败计入状态，取消继续传播；清理遗留文件失败也计入状态且不覆盖原始结果，已发布 ZIP 仍可返回 Success，必要时检查 status。 |
 | Hilt 宿主与 Compose 示例入口 | [app README](../../app/README.md) |
 | 已实现范围与当前限制 | [项目总览](../../README.md)中的当前进度和限制；学习路线不约束接入方 |
 

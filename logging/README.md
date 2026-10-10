@@ -80,7 +80,7 @@ DEBUG、INFO、WARN、ERROR 均支持 `(message, throwable)`，等级由影响�
 ## 性能与丢失契约
 
 - 默认最多 256 条准备、排队和处理中记录；参考 Logback 限制条数，取消固定正文截断及估算文本预算校验，没有另加待处理字节预算。队列持有完整原字符串，大正文积压仍可能增加内存，条数上限不等于堆内存上限；调用方和脱敏回调也会有额外分配。
-- 非挂起记录返回 Boolean：true 仅代表接受；过滤、队列满或关闭返回 false。压力下先拒绝低等级，满时丢弃新记录，保留已接受顺序，不等待磁盘；竞争线程只有短暂入队锁。
+- 非挂起记录返回 Boolean：true 仅代表接受；过滤、队列满或关闭返回 false。压力下先拒绝低等级，满时丢弃新记录，不等待队列空间、不执行调用方磁盘 IO。记录顺序以成功入队为准。
 - UTF-8 字符流配合 8192 字符写缓冲，正文以最多 4096 字符的临时块转义、编码，不生成完整转义副本或整条 UTF-8 字节数组。写入前无分配扫描字节数以检查总预算；按 flushIntervalMillis 安排刷新（默认每秒），显式 flush/快照/滚动/关闭也刷新。磁盘失败后退避 1–60 秒，期间不重试每条记录，计入 failed；恢复后只处理新日志，不无限保存失败日志。
 - accepted 是接受数；dropped 是关闭/容量等拒绝数（过滤不计）；truncated 是已接受记录的截断数，仅覆盖 TAG 和有界异常快照，普通正文及脱敏扩张不截断；每条最多计一次，即使后来处理失败也保留该计数；written 是追加到文件缓冲成功数；failed 是处理失败、刷新/清理失败及退避期间文件记录跳过数，因此不等于独立日志条数。status 独立读取计数，不是事务快照。
 - FlushResult.isSuccessful 只表示本次刷新未出现新错误，必须同时检查累计 status；已丢弃或失败记录不会恢复。flush 不做 fsync，关机/强杀可能丢失排队及未刷新的记录。稳定性优先，不承诺零丢失。
@@ -88,6 +88,26 @@ DEBUG、INFO、WARN、ERROR 均支持 `(message, throwable)`，等级由影响�
 - shutdown 用挂起 Logging.close(timeoutMillis)，默认等待超时为 1000ms（协程调度不构成硬实时期限）；超时返回失败，已请求的后台排空继续，已接受数据不会因超时主动清空。调用者取消继续传播且不撤销关闭请求；应用生命周期由宿主负责，Android 不保证调用 Application.onTerminate。不能用关闭钩子承诺末尾日志保留。
 
 Logcat 单独按最多 1024 个 UTF-16 字符单元分块发送，防止一次提交巨大字符串；可能显示为多条 Logcat 行。文件保持一条完整记录。Logcat 平台本身的限制不构成文件正文截断。
+
+### 实测吞吐范围（2026-10-10）
+
+当前所有线程均不等待队列空间；限时等待实验已移除，没有 `enqueueTimeoutMillis` 参数。
+
+DAYU_A6、Android 15/API 35，默认队列 256、提前丢弃阈值 51、每秒刷新，外部应用专属目录；单个后台生产线程，INFO 正文约 100 个汉字及编号，无 Throwable、Logcat 关闭、默认脱敏。每 100ms 提交一批，每档连续 10 秒、单轮测试：
+
+| 提交速率 | 尝试条数 | 完整写入并刷新 | 拒绝条数 |
+| --- | --- | --- | --- |
+| 1000 条/秒 | 10000 | 10000 | 0 |
+| 1500 条/秒 | 15000 | 15000 | 0 |
+| 2000 条/秒 | 20000 | 20000 | 0 |
+| 2500 条/秒 | 25000 | 23089 | 1911 |
+| 3000 条/秒 | 30000 | 22970 | 7030 |
+
+**本轮最高验证零丢弃档位为 2000 条/秒；2500 条/秒已出现拒绝。** 这是上述负载下的测试参考，不是精确最大吞吐或所有 Android 设备的保证。未细测 2000–2500 之间的速率，未证明全天持续运行；瞬间突发、主线程、较长正文、异常、Logcat、脱敏和设备存储性能都会改变结果。生产负载应留余量，并结合 dropped/failed 观察；不将提高队列容量作为持续过载的解决办法。
+
+每 10ms 采样的整个进程 Java 堆最高约 8.67MiB；各档排空并 GC 后约 2.34–2.59MiB，较各档基线最多增加 8KiB。包含测试代码、数组及未回收临时分配；采样可能漏掉瞬时峰值，不包含 native/整个进程总内存，也不等于日志库独占内存。所有接受记录逐条核对编号和正文，无重复、无缺失，failed 为 0；刷新不代表 fsync。
+
+复现用例：`LoggerStressDeviceTest#measureNonBlockingRateRangeAndHeap`，控制台输出 `LOGGER_RANGE`。完整耗时、内存原始数据和历史实验见 [RELIABILITY.md](RELIABILITY.md)。
 
 ## 存储与导出
 
@@ -120,7 +140,7 @@ Logcat 单独按最多 1024 个 UTF-16 字符单元分块发送，防止一次�
 
 ## 本次改造依据和验证
 
-Logback 的 [LoggerContext](https://github.com/tony19/logback-android/blob/main/logback-android/src/main/java/ch/qos/logback/classic/LoggerContext.java) 提供同名缓存；[AsyncAppender](https://logback.qos.ch/manual/appenders-async-sift.html) 提供队列阈值和关闭等待设计；[Appender](https://logback.qos.ch/manual/appenders.html) 提供输出递归保护、状态与生命周期设计。这里选择不等待满队列空间；不采用 xLog FilePrinter 的无界队列。后台脱敏和 Logcat 回调同步调用本日志系统时，递归记录拒绝并计数，避免回调产生无限日志。内部错误只记录累计计数与最近错误类型，不再次调用业务 Logger。正文生产和输出回调中递归记录会拒绝；回调内同步等待 flush/export 会返回失败以避免自等待。宿主不得在回调中无限阻塞、等待其他线程绕回日志系统或关闭全局日志。
+Logback 的 [LoggerContext](https://github.com/tony19/logback-android/blob/main/logback-android/src/main/java/ch/qos/logback/classic/LoggerContext.java) 提供同名缓存；[AsyncAppender](https://logback.qos.ch/manual/appenders-async-sift.html) 提供队列阈值和关闭等待设计；[Appender](https://logback.qos.ch/manual/appenders.html) 提供输出递归保护、状态与生命周期设计。不等待满队列空间；不采用 xLog FilePrinter 的无界队列。后台脱敏和 Logcat 回调同步调用本日志系统时，递归记录拒绝并计数，避免回调产生无限日志。内部错误只记录累计计数与最近错误类型，不再次调用业务 Logger。正文生产和输出回调中递归记录会拒绝；回调内同步等待 flush/export 会返回失败以避免自等待。宿主不得在回调中无限阻塞、等待其他线程绕回日志系统或关闭全局日志。
 
 第一阶段的实现与验证记录（当前收尾复测为 2026-10-10）统一维护在 [VERIFICATION.md](VERIFICATION.md)，避免多份测试数字相互漂移。
 
@@ -141,3 +161,7 @@ Logback 的 [LoggerContext](https://github.com/tony19/logback-android/blob/main/
 日志文件命名：每日未分片时为 yyyy-MM-dd.log；首次滚动时将其重命名为 yyyy-MM-dd-000000.log，新分片为 yyyy-MM-dd-000001.log，之后序号递增。兼容已有带序号文件，重启追加最新可写分片；清理和导出同时识别两种名称。重命名失败按文件 IO 失败处理，不覆盖原文件。
 
 内部诊断的失败信息包含中文操作名称与异常类型，不包含异常 message 或业务正文；文件流关闭失败输出错误提示。测试中的查找与清理以初始化结果/写入器实际目录为准，自定义目录用例彼此隔离。最新验收为 49 个 JVM 测试和 4 个 API 35 设备测试，详见 VERIFICATION.md。
+
+## 第二阶段可靠性验证
+
+本轮补充目录占用、首次滚动重命名失败、清理失败、多行 UTF-8 残尾恢复测试；压力与实际强杀实验改用当前外部专属存储。API 35 页面及文件验收通过，其他 Android 版本按用户选择保留待验收，不能宣称跨版本完成。结果、复现命令和限制见 [RELIABILITY.md](RELIABILITY.md)，强杀脚本见 [verify-force-stop.ps1](scripts/verify-force-stop.ps1)。

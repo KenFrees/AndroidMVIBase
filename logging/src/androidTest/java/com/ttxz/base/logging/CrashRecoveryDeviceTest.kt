@@ -19,14 +19,16 @@ class CrashRecoveryDeviceTest {
     @Test fun prepareForForceStop() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("crashStage") == "prepare")
         val app = InstrumentationRegistry.getInstrumentation().targetContext
-        val root = File(app.filesDir, "crash-recovery-test")
-        root.deleteRecursively()
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
-        val engine = LogEngine(File(root, "logs"), File(root, "exports"), LogConfig(logcatMinLevel = null,
-            redact = { if (it == "pending") { entered.countDown(); release.await(45, TimeUnit.SECONDS) }; it })) { _, _, _ -> }
+        val engine = LogEngine.create(app, LogConfig(directoryName = "crash-recovery-stage2", logcatMinLevel = null,
+            redact = { if (it == "pending") { entered.countDown(); release.await(45, TimeUnit.SECONDS) }; it }))
+        val directory = File(engine.logDirectory)
+        check(directory.deleteRecursively()) { "Cannot prepare crash recovery directory" }
         try {
-            assertTrue(engine.info("Recovery", "persisted"))
+            assertTrue(engine.error("Recovery", "persisted", IllegalStateException("force-stop stack").apply {
+                stackTrace = arrayOf(StackTraceElement("Recovery", "prepare", "Recovery.kt", 1))
+            }))
             assertTrue(engine.flush().isSuccessful)
             assertTrue(engine.info("Recovery", "pending"))
             assertTrue(entered.await(5, TimeUnit.SECONDS))
@@ -39,19 +41,20 @@ class CrashRecoveryDeviceTest {
     @Test fun verifyAfterForceStop() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("crashStage") == "verify")
         val app = InstrumentationRegistry.getInstrumentation().targetContext
-        val root = File(app.filesDir, "crash-recovery-test")
-        val directory = File(root, "logs")
-        val before = directory.listFiles()!!.flatMap { it.readLines() }
-        assertTrue(before.any { it.endsWith("[Recovery] persisted") })
-        assertFalse(before.any { it.contains("pending") })
-        val engine = LogEngine(directory, File(root, "exports"), LogConfig(logcatMinLevel = null)) { _, _, _ -> }
+        val engine = LogEngine.create(app, LogConfig(directoryName = "crash-recovery-stage2", logcatMinLevel = null))
+        val directory = File(engine.logDirectory)
         try {
+            val before = directory.listFiles()!!.flatMap { it.readLines() }
+            assertTrue(before.any { it.endsWith("[Recovery] persisted") })
+            assertFalse(before.any { it.contains("pending") })
             assertTrue(engine.info("Recovery", "after restart"))
             assertTrue(engine.flush().isSuccessful)
             val lines = directory.listFiles()!!.flatMap { it.readLines() }
-            assertEquals(2, lines.size)
+            assertEquals(4, lines.size)
+            assertTrue(lines.contains("java.lang.IllegalStateException: force-stop stack"))
+            assertTrue(lines.contains("\tat Recovery.prepare(Recovery.kt:1)"))
             assertTrue(lines.any { it.endsWith("[Recovery] after restart") })
             println("LOGGER_CRASH_RECOVERY persisted=1 pendingLost=1 newWritten=1")
-        } finally { engine.close(); root.deleteRecursively() }
+        } finally { engine.close(); directory.deleteRecursively() }
     }
 }
