@@ -328,3 +328,16 @@ API 37 专用模拟器，新增设备测试编译与 lint 通过。CrashRecovery
 LogArchiveDeviceTest 共 2 项通过。新增测试使用 8 MiB 历史随机文件，主线程每批 10 条、批次间延迟 10ms，1000 批；实际观测到压缩临时文件与写入重叠，10000 条 accepted、0 dropped、0 failed，核对所有接受记录落盘且无重复。采样堆峰值 21450096 字节，最大单次提交耗时 1358 微秒；包含测试框架和预热，不是库独占内存或吞吐上限，不代表长稳/真机结果。
 
 报告：logging/build/archive-crash-prepare.txt、archive-crash-verify.txt、archive-concurrent-results.txt、archive-extra-metrics.txt；构建 logging/build/archive-extra-build.txt。此次采用进程自杀验证骤停，不等价于断电或系统 force-stop 的全部语义；只覆盖临时输出中断阶段，发布后删源失败已有确定性单元测试覆盖。未执行真实跨午夜、磁盘耗尽、锁屏 Doze 或长时间压缩负载。测试完成已关闭本次模拟器。
+
+### 真机跨日留存现场（2026-10-10，计划 10 月 12 日验收）
+
+DAYU_A6 / 3127RH1010015919，安装当前 release 测试签名包（保留已有 app 数据），目录 `/sdcard/Android/data/com.ttxz.base/files/logs`。保留原有文件，新增如下独立分片，TAG 为 CrossDay20261010。今日两片均超过滚动阈值，后续写入另开分片，避免修改已保存的内容摘要。总目录仍低于默认 20 MiB；如期间大量写入触发容量清理，则需按容量策略解释结果，不能当成日期清理缺陷。
+
+| 文件 | 原始字节 | 记录数 | SHA-256 | 10 月 12 日期望 |
+| --- | ---: | ---: | --- | --- |
+| 2026-10-10-900000.log | 2288890 | 23000 | f41f93abe77b8a6e9291cdc916eb540c6f9e69f62afe55448b1d65702f56176c | gzip retained |
+| 2026-10-10-900001.log | 2288890 | 23000 | a7839f513e829c1b591df3b79fb2114c512cd21dc8a7692ff4cf8c31425cd835 | gzip retained |
+| 2026-10-05-900000.log | 48890 | 500 | ecd9ff78156a78a786d6e36895d2859ea40d67e83c3b0ae2194492de7e666ed6 | deleted on October 12 |
+| 2026-10-06-900000.log | 48890 | 500 | 17a4e871583105b6e7eb8717f73eefa0210883d59be99829cf94519d33bc6a53 | gzip retained on October 12 |
+
+已核对设备源文件摘要与本地清单一致，随后启动 app。10 月 5、6 日文件启动后自动压缩；10 月 10 日两片保留普通日志。10 月 12 日应删除 5 日归档、保留 6 日归档、今日两片分别压缩；对保留归档解压后的字节计算摘要并核对记录数。不修改设备时钟，不承诺退出进程后午夜自动执行；验收时先记录启动前现场，再启动 app 等待维护后重新核对。原始 fixture、清单和设备列表在 logging/build/cross-day-20261010；此表保留验收基线。
