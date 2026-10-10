@@ -270,3 +270,5 @@ file.inputStream().use { raw ->
 ```
 
 跨午夜已刷新的历史流会先关闭再归档；原有正文、多行堆栈和未结束残尾按字节保留。压缩不会修复残尾。查询与读取仍不提供稳定快照，压缩成功会使旧 .log 引用失效；需要时重新查询。app 示例的检查及有限预览已同时支持普通文件和 gzip。
+
+压缩专项设备验收：`LogArchiveDeviceTest` 包含历史归档与主线程持续写入叠加测试。中断验收需在专用模拟器分两次手动运行 `CrashRecoveryDeviceTest#prepareArchiveCrash`（`-e archiveCrashStage prepare`）和 `#verifyArchiveCrash`（`-e archiveCrashStage verify`）。准备阶段会在真实临时输出出现后杀死测试进程，预期返回 Process crashed；必须以随后验证阶段通过为验收依据。使用独立 `archive-crash-check` 目录，发现既有现场时拒绝覆盖，先验证或检查现场。具体证据与边界见 VERIFICATION.md。

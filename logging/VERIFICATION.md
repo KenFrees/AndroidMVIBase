@@ -314,3 +314,17 @@ API 30 首次 release 页面检查成功，但普通 ADB shell 拉取 Android/da
 ### 最新修复设备回归（2026-10-10）
 
 重新构建最新源码的 :logging:assembleDebugAndroidTest，在 API 26、API 37 模拟器分别运行 LogArchiveDeviceTest 与 LoggerDeviceTest，均为 OK (6 tests)。覆盖后台 Tick 自动归档、中文多行堆栈解压一致、源文件删除、压缩后继续写入、按日查询和公共日志接口。报告：logging/build/archive-latest-api26-results.txt、logging/build/archive-latest-api37-results.txt。本次未重复 release 和长稳验收；最新排序与候选轮转边界由前述 JVM 回归覆盖。测试完成后关闭本次启动的两个模拟器。
+
+### 最终前缀真机回归（2026-10-10）
+
+DAYU_A6，Android 15/API 35，最新已提交源码重新构建测试 APK。LogArchiveDeviceTest 与 LoggerDeviceTest 共 6 项通过，包含真实外部测试目录历史 gzip 自动归档及解压一致、源删除、继续写入与查询。LoggerSoakDeviceTest 显式 soakMinutes=2，通过：实际 123.578 秒提交 12000 条，dropped=0、failed=0，逐分钟核对最近记录无缺失重复；写出 4126414 字节、2 个分片，触发滚动，未触发容量清理。GC 后基线堆 2350784 字节，最大保留增长 118896 字节，采样堆峰值 8507232 字节，最大提交耗时 2571 微秒（单次最大值，不是百分位）。
+
+测试期间发送 HOME 回桌面，instrumentation 继续并完成；这不等价于正式宿主锁屏、Doze 或厂商杀后台验收。压缩与持续写入为分别执行，尚未验证压缩叠加持续高负载；两分钟不是长稳验收，未执行真实跨午夜、强杀压缩、磁盘不足。报告：logging/build/physical-latest-regression.txt、logging/build/physical-latest-soak.txt。测试独立目录在 finally 清理，未清理示例宿主日志。
+
+### 压缩强杀恢复与叠加写入（2026-10-10）
+
+API 37 专用模拟器，新增设备测试编译与 lint 通过。CrashRecoveryDeviceTest#prepareArchiveCrash 显式传 archiveCrashStage=prepare：生成 8 MiB 流式随机源文件并保存 SHA-256；监测到 .gz.tmp 已写入 81987 字节后调用 Process.killProcess，instrumentation 返回 Process crashed，这是预期中断，不是通过结果。随后独立运行 #verifyArchiveCrash，archiveCrashStage=verify，OK (1 test)：确认中断源文件摘要不变、临时文件非空、正式归档尚未发布；启动真实引擎，遗留临时文件被清理、自动重新归档、解压 SHA-256 一致、源文件删除，失败计数 0。该类仍被普通 connected 测试排除，准备方法需显式参数，不会自动杀死普通测试进程。
+
+LogArchiveDeviceTest 共 2 项通过。新增测试使用 8 MiB 历史随机文件，主线程每批 10 条、批次间延迟 10ms，1000 批；实际观测到压缩临时文件与写入重叠，10000 条 accepted、0 dropped、0 failed，核对所有接受记录落盘且无重复。采样堆峰值 21450096 字节，最大单次提交耗时 1358 微秒；包含测试框架和预热，不是库独占内存或吞吐上限，不代表长稳/真机结果。
+
+报告：logging/build/archive-crash-prepare.txt、archive-crash-verify.txt、archive-concurrent-results.txt、archive-extra-metrics.txt；构建 logging/build/archive-extra-build.txt。此次采用进程自杀验证骤停，不等价于断电或系统 force-stop 的全部语义；只覆盖临时输出中断阶段，发布后删源失败已有确定性单元测试覆盖。未执行真实跨午夜、磁盘耗尽、锁屏 Doze 或长时间压缩负载。测试完成已关闭本次模拟器。

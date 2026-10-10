@@ -57,4 +57,78 @@ class CrashRecoveryDeviceTest {
             println("LOGGER_CRASH_RECOVERY persisted=1 pendingLost=1 newWritten=1")
         } finally { engine.close(); directory.deleteRecursively() }
     }
+    /** 显式 archiveCrashStage=prepare 才会杀死自身；保留现场供下一次 instrumentation 验证。 */
+    @Test fun prepareArchiveCrash() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("archiveCrashStage") == "prepare")
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        val root = File(app.getExternalFilesDir(null), "archive-crash-check")
+        check(!root.exists()) { "Archive crash fixture already exists; verify or inspect it first" }
+        check(root.mkdirs())
+        val day = java.time.LocalDate.now(java.time.ZoneId.of("UTC")).minusDays(1)
+        val source = File(root, "$day.log")
+        val random = java.util.Random(42)
+        source.outputStream().use { output ->
+            val block = ByteArray(8192)
+            repeat(1024) { random.nextBytes(block); output.write(block) }
+        }
+        File(root, "expected.sha256").writeText(archiveDigest(source))
+        val temporary = File(root, source.name + ".gz.tmp")
+        val watcher = Thread {
+            val deadline = System.nanoTime() + 20_000_000_000L
+            while (System.nanoTime() < deadline) {
+                if (temporary.length() > 0) {
+                    File(root, "kill-observed.txt").writeText("temporaryBytes=${temporary.length()}")
+                    android.os.Process.killProcess(android.os.Process.myPid())
+                    return@Thread
+                }
+                Thread.sleep(1)
+            }
+        }
+        watcher.start()
+        val engine = LogEngine.create(app, LogConfig(directoryName = root.name, zoneId = java.time.ZoneId.of("UTC"),
+            maxDirectoryBytes = 64L * 1024 * 1024, flushIntervalMillis = 100, logcatMinLevel = null))
+        try { delay(25_000); fail("Did not terminate during archive output") }
+        finally { engine.close(); watcher.join() }
+    }
+
+    @Test fun verifyArchiveCrash() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("archiveCrashStage") == "verify")
+        val app = InstrumentationRegistry.getInstrumentation().targetContext
+        val root = File(app.getExternalFilesDir(null), "archive-crash-check")
+        assertTrue(File(root, "kill-observed.txt").isFile)
+        val source = root.listFiles()!!.single { it.name.endsWith(".log") }
+        val expected = File(root, "expected.sha256").readText()
+        assertEquals(expected, archiveDigest(source))
+        assertTrue(File(root, source.name + ".gz.tmp").length() > 0)
+        val archive = File(root, source.name + ".gz")
+        assertFalse(archive.exists())
+        val engine = LogEngine.create(app, LogConfig(directoryName = root.name, zoneId = java.time.ZoneId.of("UTC"),
+            maxDirectoryBytes = 64L * 1024 * 1024, flushIntervalMillis = 100, logcatMinLevel = null))
+        try {
+            assertTrue(engine.info("Recovery", "after archive crash"))
+            assertTrue(engine.flush().isSuccessful)
+            val deadline = System.nanoTime() + 20_000_000_000L
+            while ((!archive.exists() || source.exists()) && System.nanoTime() < deadline) delay(50)
+            assertFalse(source.exists()); assertTrue(archive.isFile)
+            assertFalse(File(root, source.name + ".gz.tmp").exists())
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            java.util.zip.GZIPInputStream(archive.inputStream()).use { input ->
+                val buffer = ByteArray(8192)
+                while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
+            }
+            assertEquals(expected, digest.digest().joinToString("") { "%02x".format(it) })
+            assertEquals(0L, engine.status().failed)
+            println("LOGGER_ARCHIVE_CRASH_PASS " + File(root, "kill-observed.txt").readText())
+        } finally { engine.close(); root.deleteRecursively() }
+    }
+
+    private fun archiveDigest(file: File): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            while (true) { val count = input.read(buffer); if (count < 0) break; digest.update(buffer, 0, count) }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
 }
