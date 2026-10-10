@@ -7,6 +7,10 @@ import java.io.OutputStreamWriter
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
+import java.io.FilterOutputStream
+import java.io.IOException
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import java.time.Instant
 import java.time.LocalDate
 
@@ -19,6 +23,7 @@ internal class LogFiles(private val directory: File, private val config: LogConf
     private var activeDay: LocalDate? = null
     private var size = 0L
     private var total = 0L
+    private var archiveCursor: String? = null
 
     fun write(timestamp: Long, line: String) = write(timestamp, line, emptyList())
 
@@ -31,24 +36,33 @@ internal class LogFiles(private val directory: File, private val config: LogConf
             close()
             ensureDirectory()
             val plain = File(directory, "$day.log")
-            val numbered = logs().filter { it.name.startsWith("$day-") }.sortedBy { fileIndex(it) }
+            val numbered = logs().filter { it.name.startsWith("$day-") }
+                .sortedWith(compareBy<File> { fileIndex(it) }.thenBy { it.name.endsWith(".gz") })
             // 同时存在无序号与编号文件时，不覆盖已有分片；无序号文件接到末尾。
             var last = numbered.lastOrNull()
             if (plain.isFile) {
-                if (last == null) last = plain else {
+                val archivedPlain = File(directory, plain.name + ".gz")
+                if (archivedPlain.exists()) {
+                    // 发布后删源失败：保留原名供维护验证删除，不能重命名后重复归档。
+                    if (last == null) last = archivedPlain
+                } else if (last == null) {
+                    last = plain
+                } else {
                     val target = shard(day, Math.addExact(fileIndex(last), 1L))
                     check(!target.exists() && plain.renameTo(target)) { "Cannot rename log shard" }
                     last = target
                 }
             }
             // 进程可能在一次写入中被杀；追加前去掉没有换行结束的残缺尾记录。
-            if (last != null) repairTail(last)
-            val next = if (last == null) plain else if (last.length() < config.maxFileBytes && last.length() <= config.maxDirectoryBytes - bytes) last else {
+            if (last != null && !last.name.endsWith(".gz")) repairTail(last)
+            val next = if (last == null) {
+                if (File(directory, "$day.log.gz").exists()) shard(day, 0L) else plain
+            } else if (!last.name.endsWith(".gz") && last.length() < config.maxFileBytes && last.length() <= config.maxDirectoryBytes - bytes) last else {
                 if (last == plain) {
                     val first = shard(day, 0L)
                     check(!first.exists() && plain.renameTo(first)) { "Cannot rename first log shard" }
                     shard(day, 1L)
-                } else shard(day, Math.addExact(fileIndex(last), 1L))
+                } else if (last.name == "$day.log.gz") shard(day, 0L) else shard(day, Math.addExact(fileIndex(last), 1L))
             }
             active = next
             activeDay = day
@@ -84,6 +98,7 @@ internal class LogFiles(private val directory: File, private val config: LogConf
 
     fun cleanup(now: Long, incoming: Long = 0) {
         ensureDirectory()
+        removeArchiveTemps()
         // Buffered bytes aren't reflected in File.length until flush; include them in the budget.
         val files = logs().sortedWith(compareBy<File> { it.lastModified() }.thenBy { it.name })
         total = files.fold(0L) { sum, file -> Math.addExact(sum, if (file == active) size else file.length()) }
@@ -100,11 +115,96 @@ internal class LogFiles(private val directory: File, private val config: LogConf
         }
     }
 
+    /** 串行消费者每次最多处理一片；临时输出也受剩余预算限制，不覆盖已有归档。 */
+    fun archiveOne(now: Long): Boolean {
+        if (!directory.exists()) return false
+        val today = Instant.ofEpochMilli(now).atZone(config.zoneId).toLocalDate()
+        if (activeDay?.let { it < today } == true) close()
+        cleanup(now)
+        val files = logs()
+        val candidates = files.filter { it != active && !it.name.endsWith(".gz") }
+            .filter { runCatching { LocalDate.parse(it.name.take(10)) < today }.getOrDefault(false) }
+            .sortedBy { it.name }
+        val source = candidates.firstOrNull { archiveCursor?.let { cursor -> it.name > cursor } != false }
+            ?: candidates.firstOrNull() ?: return false
+        // 失败也前移游标，避免单个冲突或预算不足的文件永久阻塞其他分片；绕回后重试。
+        archiveCursor = source.name
+        val target = File(directory, source.name + ".gz")
+        if (target.exists()) {
+            // 发布后、删源文件前骤停：逐字节验证已有归档，不能仅凭文件名删除源文件。
+            check(sameArchive(source, target)) { "Existing log archive differs from source" }
+            check(source.delete()) { "Cannot delete archived source log" }
+            total = logs().sumOf { if (it == active) size else it.length() }
+            return true
+        }
+        total = files.sumOf { if (it == active) size else it.length() }
+        val allowance = config.maxDirectoryBytes - total
+        if (allowance < 20) return false
+        val temporary = File(directory, source.name + ".gz.tmp")
+        check(temporary.createNewFile()) { "Cannot create temporary log archive" }
+        try {
+            var remaining = allowance
+            val limited = object : FilterOutputStream(FileOutputStream(temporary)) {
+                override fun write(value: Int) {
+                    if (remaining < 1) throw ArchiveBudgetExceededException()
+                    out.write(value); remaining--
+                }
+                override fun write(buffer: ByteArray, offset: Int, count: Int) {
+                    if (count.toLong() > remaining) throw ArchiveBudgetExceededException()
+                    out.write(buffer, offset, count); remaining -= count
+                }
+            }
+            limited.use { output ->
+                GZIPOutputStream(output, 8192).use { zipped -> source.inputStream().use { it.copyTo(zipped, 8192) } }
+            }
+            // 同一消费者持有文件生命周期；校验关闭后的归档，成功发布后才允许删除源文件。
+            check(sameArchive(source, temporary)) { "Log archive verification failed" }
+            // 容量清理按修改时间排序；压缩不能把旧日志变成最新历史。
+            check(temporary.setLastModified(source.lastModified())) { "Cannot preserve archived log age" }
+            check(!target.exists() && temporary.renameTo(target)) { "Cannot publish log archive" }
+            check(source.delete()) { "Cannot delete archived source log" }
+            total = logs().sumOf { if (it == active) size else it.length() }
+            diagnostic.write(LogLevel.DEBUG) { "历史日志压缩完成：${target.name}" }
+            return true
+        } catch (_: ArchiveBudgetExceededException) {
+            return false
+        } finally {
+            if (temporary.exists()) check(temporary.delete()) { "Cannot delete temporary log archive" }
+        }
+    }
+
+    private fun sameArchive(source: File, archive: File): Boolean = source.inputStream().use { original ->
+        archive.inputStream().use { raw -> GZIPInputStream(raw, 8192).use { zipped ->
+            val left = ByteArray(8192)
+            val right = ByteArray(8192)
+            while (true) {
+                val count = original.read(left)
+                if (count < 0) return@use zipped.read() == -1
+                var read = 0
+                while (read < count) {
+                    val next = zipped.read(right, read, count - read)
+                    if (next < 0) return@use false
+                    read += next
+                }
+                for (index in 0 until count) if (left[index] != right[index]) return@use false
+            }
+            @Suppress("UNREACHABLE_CODE") false
+        } }
+    }
+
+    private fun removeArchiveTemps() {
+        // 没有并行压缩任务：该严格命名的临时文件只可能来自本进程上次中断。
+        // 首次写入的清理也调用此处，防止遗留临时字节游离于目录预算之外。
+        directory.listFiles()?.filter { it.isFile && it.name.matches(ARCHIVE_TEMP_PATTERN) }?.forEach {
+            check(it.delete()) { "Cannot delete incomplete log archive" }
+        } ?: error("Cannot list log directory")
+    }
+
     private fun shard(day: LocalDate, index: Long): File =
         File(directory, "$day-${index.toString().padStart(6, '0')}.log")
 
     private fun fileIndex(file: File): Long =
-        file.name.removeSuffix(".log").substringAfterLast('-').toLongOrNull()
+        file.name.removeSuffix(".gz").removeSuffix(".log").substringAfterLast('-').toLongOrNull()
             ?: error("Invalid log file index")
 
     private fun ensureDirectory() {
@@ -140,6 +240,9 @@ internal class LogFiles(private val directory: File, private val config: LogConf
     } ?: error("Cannot list log directory")
 
     companion object {
-        private val LOG_FILE_PATTERN = Regex("\\d{4}-\\d{2}-\\d{2}(?:-\\d{6,})?\\.log")
+        private val LOG_FILE_PATTERN = Regex("\\d{4}-\\d{2}-\\d{2}(?:-\\d{6,})?\\.log(?:\\.gz)?")
+        private val ARCHIVE_TEMP_PATTERN = Regex("\\d{4}-\\d{2}-\\d{2}(?:-\\d{6,})?\\.log\\.gz\\.tmp")
     }
 }
+
+private class ArchiveBudgetExceededException : IOException("No temporary archive budget")

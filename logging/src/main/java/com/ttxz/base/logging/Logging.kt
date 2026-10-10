@@ -44,7 +44,7 @@ object Logging {
     /** 挂起等待此前已接受记录刷新；不做 fsync。未启用或在记录回调中调用返回失败。 */
     suspend fun flush(): FlushResult = context.flush()
 
-    /** 查询实际日志目录中的文件，可按日志命名日期筛选；从新到旧排序，不刷新、不复制内容。
+    /** 查询实际日志目录中的 .log / .log.gz 文件，gzip 由调用方流式解压；可按日志命名日期筛选；从新到旧排序，不刷新、不复制内容。
      * IO 在后台执行，目录尚未创建返回空列表；未初始化、初始化停用或 IO 失败返回 Result.failure，取消传播。
      * 文件可能继续写入、滚动重命名或被清理。读取前可先 flush；持久副本由宿主负责。 */
     suspend fun logFiles(date: java.time.LocalDate? = null): Result<List<java.io.File>> {

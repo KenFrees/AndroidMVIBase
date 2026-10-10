@@ -67,3 +67,5 @@ Review 先列问题，给文件/行号、触发条件、影响和建议，再列
 ### logging 的 R8 接入
 
 当前 logging 实现无需整包 keep 或额外 consumer 规则；不要为保留日志功能关闭宿主优化。宿主启用标准 R8 优化、保留默认诊断信息，并按每次最终构建归档 mapping.txt。异常文件可提取标准多行堆栈用 Retrace 还原，超出有界快照的帧不能恢复。类对象 Logger 的名称可能混淆，稳定 TAG 使用显式字符串。日志页的优化 release 验证不代表业务全部功能已通过 R8 验收，范围见 logging/README.md。
+
+logging 历史日志会自动变为 `.log.gz`，查询仍返回 File，调用方按扩展名用 GZIPInputStream 流式读取，不能直接 readText 压缩文件。压缩、滚动或清理可能使已查询 File 失效，处理读取失败并按需重新查询；压缩不是 ZIP 导出，调用方式和预算边界见 logging/README.md。

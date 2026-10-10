@@ -44,7 +44,7 @@ internal suspend fun checkLogIntegration(): String {
         for (file in files) {
             currentCoroutineContext().ensureActive()
             if (remaining.isEmpty()) break
-            file.bufferedReader().use { reader ->
+            file.logReader().use { reader ->
                 var tail = ""
                 while (remaining.isNotEmpty()) {
                     currentCoroutineContext().ensureActive()
@@ -67,7 +67,7 @@ internal suspend fun checkLogIntegration(): String {
 /** 预览最新文件开头，最多读取 8192 个字符；文件可能在查询后被清理，由调用方展示 IO 失败。 */
 internal suspend fun previewLogFile(file: File): String = withContext(Dispatchers.IO) {
     val buffer = CharArray(8192)
-    val content = file.bufferedReader().use { reader ->
+    val content = file.logReader().use { reader ->
         var size = 0
         while (size < buffer.size) {
             currentCoroutineContext().ensureActive()
@@ -106,7 +106,7 @@ internal suspend fun checkLogLifecycle(): String = withContext(Dispatchers.IO) {
         val pattern = Regex(Regex.escape("[LogLifecycle] $id record=") + "(\\d+) ")
         val buffer = CharArray(4096)
         for (file in files) {
-            file.bufferedReader().use { reader ->
+            file.logReader().use { reader ->
                 var tail = ""
                 while (true) {
                     currentCoroutineContext().ensureActive()
@@ -133,5 +133,18 @@ internal suspend fun checkLogLifecycle(): String = withContext(Dispatchers.IO) {
     } finally {
         // 仅清理由本次 createNewFile 成功创建的夹具，绝不删除其他日志。
         if (expired.exists()) expired.delete()
+    }
+}
+
+
+/** 示例端按扩展名选择解压，维持原有流式与有限预览行为。 */
+private fun File.logReader(): java.io.BufferedReader {
+    val raw = inputStream()
+    return try {
+        val stream = if (name.endsWith(".gz")) java.util.zip.GZIPInputStream(raw) else raw
+        stream.bufferedReader(Charsets.UTF_8)
+    } catch (error: Exception) {
+        raw.close()
+        throw error
     }
 }

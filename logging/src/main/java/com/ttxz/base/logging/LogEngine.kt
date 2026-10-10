@@ -230,6 +230,8 @@ internal class LogEngine(
     private suspend fun consume() {
         var lastFlush = maintenanceStartNanos
         var lastCleanup = lastFlush
+        var lastArchive = lastFlush - 60_000_000_000L
+        var archiveIntervalMillis = 1000L
         for (command in commands) {
             when (command) {
                 is Command.Record -> {
@@ -288,6 +290,14 @@ internal class LogEngine(
                     if ((now - lastCleanup) / 1_000_000 >= CLEANUP_INTERVAL_MILLIS) {
                         lastCleanup += ((now - lastCleanup) / 1_000_000 / CLEANUP_INTERVAL_MILLIS) * CLEANUP_INTERVAL_MILLIS * 1_000_000
                         try { files.cleanup(System.currentTimeMillis()) } catch (error: Exception) { report("定期清理日志文件", error) }
+                    }
+                    if ((now - lastArchive) / 1_000_000 >= archiveIntervalMillis) {
+                        lastArchive = now
+                        // 每次最多一片；失败独立退避，不关闭正常写入流、不阻塞业务调用线程。
+                        archiveIntervalMillis = 60_000L
+                        try {
+                            if (files.archiveOne(System.currentTimeMillis())) archiveIntervalMillis = 1000L
+                        } catch (error: Exception) { report("压缩历史日志文件", error) }
                     }
                 }
             }

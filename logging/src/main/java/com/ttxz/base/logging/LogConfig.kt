@@ -20,7 +20,7 @@ enum class LogLevel { DEBUG, INFO, WARN, ERROR }
  * @param discardingThreshold 剩余槽数小于阈值时拒绝 DEBUG/INFO；null 使用 queueCapacity / 5，0 禁用提前丢弃。
  * 显式值范围为 0–queueCapacity；队列满时所有等级都拒绝且不等待空间。
  * @param maxFileBytes 单文件滚动阈值，单位字节，默认 2 MiB，必须大于 0；完整记录可使文件超限，下一条记录前滚动。
- * @param maxDirectoryBytes 日志文件总字节预算，默认 20 MiB，必须大于 0 且不少于单文件；不含未知文件。
+ * @param maxDirectoryBytes 日志文件（含历史 gzip）总字节预算，默认 20 MiB，必须大于 0 且不少于单文件；不含未知文件。
  * 活动文件受保护；单条编码后超过总预算或无法清理出空间时报告文件写入失败，不截断正文。
  * @param retentionDays 保留最近多少个日历日，默认 7，必须大于 0；按 zoneId 计算，保护当前活动文件。
  * @param flushIntervalMillis 缓冲刷新间隔，单位毫秒，默认 1000，必须大于 0；不做 fsync，骤停仍可能丢失日志。

@@ -1,5 +1,6 @@
 """只验收已安装的示例 release；保留应用数据，强停两次，写入约 3 MiB 测试日志。"""
 import argparse
+import gzip
 import hashlib
 import json
 import locale
@@ -114,10 +115,19 @@ restarted = wait_text("本次文件核对通过")
 require("6/6" in restarted, restarted)
 adb("pull", directory, str(args.output / "after"))
 checks = []
-for old in sorted((args.output / "before").glob("*.log")):
+def log_files(directory):
+    return sorted(file for file in directory.iterdir() if file.is_file() and
+                  (file.name.endswith(".log") or file.name.endswith(".log.gz")))
+
+def open_log(file, **options):
+    return gzip.open(file, **options) if file.name.endswith(".gz") else file.open(**options)
+
+for old in log_files(args.output / "before"):
     new = args.output / "after" / old.name
+    if not new.exists() and not old.name.endswith(".gz"):
+        new = args.output / "after" / (old.name + ".gz")
     digest = hashlib.sha256()
-    with old.open("rb") as left, new.open("rb") as right:
+    with open_log(old, mode="rb") as left, open_log(new, mode="rb") as right:
         while block := left.read(8192):
             require(block == right.read(len(block)), "History changed: " + old.name)
             digest.update(block)
@@ -126,8 +136,8 @@ for old in sorted((args.output / "before").glob("*.log")):
 require(bool(checks), "No historical files found")
 records = []
 pattern = re.compile(re.escape("[LogLifecycle] " + run_id + " record=") + r"(\d+) (x+)\n$")
-for file in (args.output / "after").glob("*.log"):
-    with file.open(encoding="utf-8") as stream:
+for file in log_files(args.output / "after"):
+    with open_log(file, mode="rt", encoding="utf-8") as stream:
         for line in stream:
             matched = pattern.search(line)
             if matched:

@@ -72,19 +72,21 @@ class LoggerSoakDeviceTest {
                 assertEquals(status.accepted, status.written)
                 assertEquals(before.dropped, status.dropped)
                 assertEquals(0L, status.failed)
-                val files = root.listFiles()!!.filter { it.extension == "log" }
+                val files = root.listFiles()!!.filter { it.extension == "log" || it.name.endsWith(".log.gz") }
                 val bytes = files.sumOf { it.length() }
                 assertTrue("Directory budget exceeded: $bytes", bytes <= config.maxDirectoryBytes)
                 maxDirectoryBytes = maxOf(maxDirectoryBytes, bytes)
                 rolled = rolled || files.size > 1
-                val names = files.map { it.name }.toSet()
+                val names = files.map { it.name.removeSuffix(".gz") }.toSet()
                 // 首次滚动会把无序号文件重命名，不能将该消失误报为容量清理。
-                cleaned = cleaned || (previousFiles - names).any { it.matches(Regex(".*-\\d{6}\\.log")) }
+                cleaned = cleaned || (previousFiles - names).any { it.matches(Regex(".*-\\d{6}\\.log(?:\\.gz)?")) }
                 previousFiles = names
                 // 只核对最近一分钟；更早记录允许被默认目录预算正常清理。
                 val seen = BooleanArray(6000)
                 val first = minute * 6000
-                files.forEach { file -> file.useLines { lines -> lines.forEach { line ->
+                files.forEach { file -> file.inputStream().use { raw ->
+                    val input = if (file.name.endsWith(".gz")) java.util.zip.GZIPInputStream(raw) else raw
+                    input.bufferedReader().useLines { lines -> lines.forEach { line ->
                     if ("[Soak] " in line) {
                         val body = line.substringAfter("[Soak] ")
                         val id = body.substringBefore(':').toIntOrNull()
@@ -95,7 +97,7 @@ class LoggerSoakDeviceTest {
                             assertEquals(payload, body.substringAfter(':'))
                         }
                     }
-                } } }
+                } } } }
                 assertTrue("Missing recent records", seen.all { it })
                 heaps[minute + 1] = settle()
                 assertTrue("Retained heap grew: ${heaps.take(minute + 2)}",
