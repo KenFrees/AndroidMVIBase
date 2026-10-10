@@ -38,4 +38,8 @@
     <string name="log_demo_files">查看日志文件</string>
     <string name="log_demo_files_empty">暂无日志文件</string>
     <string name="log_demo_files_failed">查询日志文件失败：%1$s</string>
+    <string name="log_demo_date">查询日期（yyyy-MM-dd，留空查全部）</string>
+    <string name="log_demo_date_invalid">日期格式错误，请输入 yyyy-MM-dd 的有效日期</string>
+    <string name="log_demo_preview">预览查询结果中的最新文件</string>
+    <string name="log_demo_check">运行接入检查</string>
 </resources>

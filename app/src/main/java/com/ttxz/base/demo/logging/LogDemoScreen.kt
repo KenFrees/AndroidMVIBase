@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -32,6 +34,8 @@ import com.ttxz.base.logging.LogLevel
 import com.ttxz.base.logging.Logging
 import com.ttxz.base.ui.theme.AndroidMVIBaseTheme
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import java.time.LocalDate
 
 /** 独立日志演示页；按固定 TAG 写入，挂起刷新和文件查询跟随页面生命周期。 */
 @Composable
@@ -39,7 +43,13 @@ fun LogDemoScreen(onBack: () -> Unit) {
     val resources = LocalResources.current
     val logger = remember { Logging.getLogger("LogDemo") }
     val scope = rememberCoroutineScope()
+    // 快速 IO 操作仍禁止重复点击，但不让全页按钮瞬间变灰再恢复。
+    val actionColors = ButtonDefaults.buttonColors(
+        disabledContainerColor = MaterialTheme.colorScheme.primary,
+        disabledContentColor = MaterialTheme.colorScheme.onPrimary,
+    )
     var message by rememberSaveable { mutableStateOf("日志写入测试：operationId=demo") }
+    var queryDate by rememberSaveable { mutableStateOf("") }
     var feedback by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf(Logging.status()) }
@@ -85,16 +95,16 @@ fun LogDemoScreen(onBack: () -> Unit) {
                 maxLines = 4,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(enabled = !busy, onClick = { write(LogLevel.DEBUG) }) { Text("DEBUG") }
-                Button(enabled = !busy, onClick = { write(LogLevel.INFO) }) { Text("INFO") }
+                Button(colors = actionColors, enabled = !busy, onClick = { write(LogLevel.DEBUG) }) { Text("DEBUG") }
+                Button(colors = actionColors, enabled = !busy, onClick = { write(LogLevel.INFO) }) { Text("INFO") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button(enabled = !busy, onClick = { write(LogLevel.WARN) }) { Text("WARN") }
-                Button(enabled = !busy, onClick = { write(LogLevel.ERROR) }) {
+                Button(colors = actionColors, enabled = !busy, onClick = { write(LogLevel.WARN) }) { Text("WARN") }
+                Button(colors = actionColors, enabled = !busy, onClick = { write(LogLevel.ERROR) }) {
                     Text(stringResource(R.string.log_demo_error))
                 }
             }
-            Button(enabled = !busy, onClick = {
+            Button(colors = actionColors, enabled = !busy, onClick = {
                 busy = true
                 scope.launch {
                     try {
@@ -104,20 +114,52 @@ fun LogDemoScreen(onBack: () -> Unit) {
                     } finally { busy = false }
                 }
             }) { Text(stringResource(R.string.log_demo_flush)) }
-            Button(enabled = !busy, onClick = {
+            OutlinedTextField(
+                value = queryDate,
+                onValueChange = { queryDate = it },
+                label = { Text(stringResource(R.string.log_demo_date)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            fun queryFiles(preview: Boolean) {
+                val date = try {
+                    queryDate.trim().takeIf { it.isNotEmpty() }?.let(LocalDate::parse)
+                } catch (_: java.time.format.DateTimeParseException) {
+                    feedback = resources.getString(R.string.log_demo_date_invalid)
+                    return
+                }
                 busy = true
                 scope.launch {
                     try {
-                        feedback = Logging.logFiles().fold(
-                            onSuccess = { files -> if (files.isEmpty()) resources.getString(R.string.log_demo_files_empty)
-                                else files.joinToString("\n") { it.absolutePath } },
-                            onFailure = { resources.getString(R.string.log_demo_files_failed, it.javaClass.simpleName) },
-                        )
-                        status = Logging.status()
-                    } finally { busy = false }
+                        val files = Logging.logFiles(date).getOrThrow()
+                        feedback = when {
+                            files.isEmpty() -> resources.getString(R.string.log_demo_files_empty)
+                            preview -> previewLogFile(files.first())
+                            else -> files.joinToString("\n") { it.absolutePath }
+                        }
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (error: Exception) {
+                        feedback = resources.getString(R.string.log_demo_files_failed, error.javaClass.simpleName)
+                    } finally { busy = false; status = Logging.status() }
                 }
-            }) { Text(stringResource(R.string.log_demo_files)) }
-            if (busy) Text(stringResource(R.string.log_demo_busy))
+            }
+            Button(colors = actionColors, enabled = !busy, onClick = { queryFiles(false) }) {
+                Text(stringResource(R.string.log_demo_files))
+            }
+            Button(colors = actionColors, enabled = !busy, onClick = { queryFiles(true) }) {
+                Text(stringResource(R.string.log_demo_preview))
+            }
+            Button(colors = actionColors, enabled = !busy, onClick = {
+                busy = true
+                scope.launch {
+                    try { feedback = checkLogIntegration() }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (error: Exception) {
+                        feedback = resources.getString(R.string.log_demo_files_failed, error.javaClass.simpleName)
+                    } finally { busy = false; status = Logging.status() }
+                }
+            }) { Text(stringResource(R.string.log_demo_check)) }
+            Text(if (busy) stringResource(R.string.log_demo_busy) else " ")
             if (feedback.isNotEmpty()) Text(feedback)
             Text(stringResource(R.string.log_demo_status, status.accepted, status.written, status.dropped, status.failed))
         }
