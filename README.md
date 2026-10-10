@@ -12,8 +12,9 @@
 | `common` | `AppResult` 以及成功、失败回调扩展 | [common/README.md](common/README.md) |
 | `network` | Hilt 提供网络对象、Moshi 转换、`safeApiCall` | [network/README.md](network/README.md) |
 | `ui` | Compose 公共组件，当前包含加载弹窗与三类消息提示 | [ui/README.md](ui/README.md) |
+| `logging` | Kotlin 本地诊断日志、固定格式、有界异步写入、滚动清理和 ZIP 导出 | [logging/README.md](logging/README.md) |
 
-当前 Gradle 依赖：`app → network → common`，同时 `app → common`、`app → ui`。这些是模块依赖，不代表 UI 应直接请求网络。
+当前 Gradle 依赖：`app → network → common`，同时 `app → common`、`app → ui`、`app → logging`。这些是模块依赖，不代表 UI 应直接请求网络。
 
 MVI 基类、列表页、统一业务错误码、登录态、离线存储均未完成。app 已有单篇文章的 Action / UiState / Effect 与 Repository / ViewModel 演示；依赖已引入不等于通用能力已封装。
 

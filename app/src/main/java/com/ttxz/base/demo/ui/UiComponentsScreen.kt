@@ -51,7 +51,10 @@ fun UiComponentsScreen(onBack: () -> Unit) {
         snackbarHost = { ToastHost(toastHostState) },
         topBar = {
             Row(
-                modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -63,25 +66,35 @@ fun UiComponentsScreen(onBack: () -> Unit) {
         },
     ) { innerPadding ->
         Box(
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(horizontal = 16.dp)
             ) {
-                Button(onClick = { isLoading = true }) {
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth(), onClick = { isLoading = true }) {
                     Text(text = stringResource(R.string.show_loading))
                 }
-                Button(onClick = { toastHostState.showSuccess(successMessage) }) {
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth(), onClick = { toastHostState.showSuccess(successMessage) }) {
                     Text(text = stringResource(R.string.show_success_toast))
                 }
-                Button(onClick = {
-                    toastHostState.showFailure(failureMessage, ToastDuration.LONG)
-                }) {
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth(), onClick = {
+                        toastHostState.showFailure(failureMessage, ToastDuration.LONG)
+                    }) {
                     Text(text = stringResource(R.string.show_failure_toast))
                 }
-                Button(onClick = { toastHostState.showWarning(warningMessage) }) {
+                Button(
+                    modifier = Modifier
+                        .fillMaxWidth(), onClick = { toastHostState.showWarning(warningMessage) }) {
                     Text(text = stringResource(R.string.show_warning_toast))
                 }
             }

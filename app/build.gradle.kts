@@ -47,6 +47,7 @@ dependencies {
     implementation(project(":common"))
     implementation(project(":network"))
     implementation(project(":ui"))
+    implementation(project(":logging"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

@@ -2,14 +2,17 @@
 
 ## 职责与当前能力
 
-app 用于启动、展示和验证基础模块。首页提供 UI 组件与网络请求演示入口；UI 演示页包含 Loading 弹窗及三类 Toast，网络演示页调用 JSONPlaceholder 文章接口。尚未实现登录、网络列表页或通用 MVI 基类。
+app 用于启动、展示和验证基础模块。首页提供 UI 组件、网络请求和日志测试入口；UI 演示页包含 Loading 弹窗及三类 Toast，网络演示页调用 JSONPlaceholder 文章接口。尚未实现登录、网络列表页或通用 MVI 基类。
 
 应用 ID / 命名空间为 `com.ttxz.base`，minSdk 26；依赖 common、network 和 ui，并配置 Compose、Hilt、KSP。
+
+同时依赖 [logging](../logging/README.md)，BaseApp.onCreate 初始化 Logging，独立日志测试页按名称获取并复用 Logger。首页提供“日志测试”跳转入口；测试页显示实际日志保存目录，支持自定义正文、各等级写入、ERROR 异常堆栈、挂起刷新和导出；导出 ZIP 保存到私有缓存目录，示例不自动上传或分享。日志默认保存于 getExternalFilesDir(null)/logs，页面显示实际绝对路径；新外部目录及旧内部日志目录均排除备份。页面协程取消时仍先完成已提交快照协调，再清理临时文件。
 
 | 文件 | 作用 |
 | --- | --- |
 | [BaseApp.kt](src/main/java/com/ttxz/base/BaseApp.kt) | 带 `@HiltAndroidApp` 的 Application，Hilt 宿主入口 |
-| [MainActivity.kt](src/main/java/com/ttxz/base/MainActivity.kt) | `@AndroidEntryPoint` Activity，通过 Navigation Compose 连接首页和 UI 组件演示页 |
+| [MainActivity.kt](src/main/java/com/ttxz/base/MainActivity.kt) | `@AndroidEntryPoint` Activity，通过 Navigation Compose 连接首页、UI、网络和日志演示页 |
+| [LogDemoScreen.kt](src/main/java/com/ttxz/base/demo/logging/LogDemoScreen.kt) | 固定 TAG 的各等级日志写入、刷新、累计状态与导出演示 |
 | [UiComponentsScreen.kt](src/main/java/com/ttxz/base/demo/ui/UiComponentsScreen.kt) | Loading 和 Toast 的页面内演示状态与按钮 |
 | [data/remote](src/main/java/com/ttxz/base/data/remote) | 宿主内可复用的 PostApi、PostDto 和 Hilt 绑定；复用 network 模块的 Retrofit |
 | [demo/post](src/main/java/com/ttxz/base/demo/post) | 文章功能包：Repository、Screen、ViewModel、Action、UiState 和 Effect |
@@ -20,7 +23,7 @@ app 用于启动、展示和验证基础模块。首页提供 UI 组件与网络
 
 ## 如何运行与使用
 
-Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显示 `Hello AndroidMVIBase!`、 “UI 组件”和“网络请求示例”两个入口。UI 页可测试两秒后自动关闭的 Loading 及三类 [ToastHost](../ui/components/toast.md) 消息。网络页点击“请求文章”访问 `GET /posts/1`，请求中显示公共 [LoadingDialog](../ui/components/loading-dialog.md)，成功后显示文章及成功 Toast；“测试 404 错误”也是按钮，请求不存在的文章后显示错误及失败 Toast。页面顶部和系统返回键均可返回首页。
+Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显示 `Hello AndroidMVIBase!`、 “UI 组件”和“网络请求示例”及“日志测试”三个入口。UI 页可测试两秒后自动关闭的 Loading 及三类 [ToastHost](../ui/components/toast.md) 消息。网络页点击“请求文章”访问 `GET /posts/1`，请求中显示公共 [LoadingDialog](../ui/components/loading-dialog.md)，成功后显示文章及成功 Toast；“测试 404 错误”也是按钮，请求不存在的文章后显示错误及失败 Toast。页面顶部和系统返回键均可返回首页。
 
 网络页使用现有 Base URL `https://jsonplaceholder.typicode.com/`。该免费模拟服务适合学习，不能保证长期在线，也不应作为正式业务服务；网络不通时页面会显示失败并允许再次请求。
 
@@ -63,3 +66,5 @@ Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显
 - 已完成的 Debug 构建记录见 [项目 README](../README.md)，后续修改须提供本次验证结果。
 
 新增学习示例或变更入口时，更新本说明；不要把业务 API 和领域类型塞入公共基础模块。
+
+日志测试：从首页进入“日志测试”，输入正文，点击 INFO/WARN/ERROR 后刷新，检查累计写入数；DEBUG 在当前宿主配置下会被过滤，ERROR 带演示堆栈。导出 ZIP 仅保存到应用私有缓存，不自动上传或分享；返回首页不关闭应用级日志系统。

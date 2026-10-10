@@ -21,4 +21,21 @@
     <string name="toast_success_message">提交成功</string>
     <string name="toast_failure_message">提交失败，请稍后重试</string>
     <string name="toast_warning_message">请先检查填写内容</string>
+    <string name="open_log_demo">日志测试</string>
+    <string name="log_demo_hint">TAG 固定为 LogDemo。当前配置写入 INFO 及以上等级，DEBUG 被过滤。ERROR 同时记录演示异常堆栈。已接受不等于已刷新，测试后可点击刷新或导出检查。</string>
+    <string name="log_demo_content">日志内容</string>
+    <string name="log_demo_error">ERROR（带异常）</string>
+    <string name="log_demo_filtered">该等级未启用，日志未接受。</string>
+    <string name="log_demo_accepted">日志已接受，可点击刷新检查写入结果。</string>
+    <string name="log_demo_rejected">日志未接受，请检查容量或初始化状态。</string>
+    <string name="log_demo_flush">刷新日志缓冲</string>
+    <string name="log_demo_flushed">本次刷新成功；不代表此前失败或丢弃的日志已恢复。</string>
+    <string name="log_demo_flush_failed">日志刷新失败，请检查累计失败数。</string>
+    <string name="log_demo_export">导出诊断日志</string>
+    <string name="log_demo_exported">已导出到应用私有缓存：%1$s</string>
+    <string name="log_demo_export_failed">日志导出失败：%1$s</string>
+    <string name="log_demo_busy">正在处理…</string>
+    <string name="log_demo_status">应用累计状态：接受 %1$d，写入缓冲 %2$d，拒绝 %3$d，失败 %4$d。</string>
+    <string name="log_demo_directory">日志保存目录：%1$s</string>
+    <string name="log_demo_directory_unavailable">未初始化或初始化失败，目录不可用</string>
 </resources>

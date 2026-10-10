@@ -6,7 +6,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,10 +26,12 @@ import com.ttxz.base.demo.ui.UiComponentsScreen
 import com.ttxz.base.demo.post.PostDemoScreen
 import com.ttxz.base.ui.theme.AndroidMVIBaseTheme
 import dagger.hilt.android.AndroidEntryPoint
+import com.ttxz.base.demo.logging.LogDemoScreen
 
 private const val HOME_ROUTE = "home"
 private const val UI_COMPONENTS_ROUTE = "ui-components"
 private const val POST_DEMO_ROUTE = "post-demo"
+private const val LOG_DEMO_ROUTE = "log-demo"
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -40,10 +46,14 @@ class MainActivity : ComponentActivity() {
                         HomeScreen(
                             onOpenComponents = { navController.navigate(UI_COMPONENTS_ROUTE) },
                             onOpenNetworkDemo = { navController.navigate(POST_DEMO_ROUTE) },
+                            onOpenLogDemo = { navController.navigate(LOG_DEMO_ROUTE) },
                         )
                     }
                     composable(UI_COMPONENTS_ROUTE) {
                         UiComponentsScreen(onBack = { navController.popBackStack() })
+                    }
+                    composable(LOG_DEMO_ROUTE) {
+                        LogDemoScreen(onBack = { navController.popBackStack() })
                     }
                     composable(POST_DEMO_ROUTE) {
                         PostDemoScreen(onBack = { navController.popBackStack() })
@@ -55,18 +65,44 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun HomeScreen(onOpenComponents: () -> Unit, onOpenNetworkDemo: () -> Unit) {
+private fun HomeScreen(
+    onOpenComponents: () -> Unit,
+    onOpenNetworkDemo: () -> Unit,
+    onOpenLogDemo: () -> Unit
+) {
     Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(text = "Hello AndroidMVIBase!")
-        Button(onClick = onOpenComponents) {
+        Button(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(top = 10.dp),
+            onClick = onOpenComponents
+        ) {
             Text(text = stringResource(R.string.open_ui_components))
         }
-        Button(onClick = onOpenNetworkDemo) {
+        Button(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(top = 10.dp),
+            onClick = onOpenNetworkDemo
+        ) {
             Text(text = stringResource(R.string.open_network_demo))
+        }
+        Button(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(top = 10.dp),
+            onClick = onOpenLogDemo
+        ) {
+            Text(text = stringResource(R.string.open_log_demo))
         }
     }
 }
@@ -75,6 +111,6 @@ private fun HomeScreen(onOpenComponents: () -> Unit, onOpenNetworkDemo: () -> Un
 @Composable
 private fun HomeScreenPreview() {
     AndroidMVIBaseTheme {
-        HomeScreen(onOpenComponents = {}, onOpenNetworkDemo = {})
+        HomeScreen(onOpenComponents = {}, onOpenNetworkDemo = {}, onOpenLogDemo = {})
     }
 }
