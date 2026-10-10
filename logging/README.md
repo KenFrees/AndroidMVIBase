@@ -184,3 +184,16 @@ Logback 的 [LoggerContext](https://github.com/tony19/logback-android/blob/main/
 53 条 JVM 测试、5 条 Android 15 设备回归通过；logging/app lint、Debug app 和测试 APK 构建通过。示例页面已通过 phone-harness 实际写入 INFO、刷新和查看文件路径，导出按钮已移除。跨版本仍待验收；本轮未重跑强杀、长期压力或吞吐测试，历史数值仅作参考。
 
 查询取消复查：公开入口在判断初始化前检查当前协程状态；内部列举阶段注入取消异常，验证取消直接传播而非返回 Result.failure，并覆盖未初始化且调用方已取消的分支。本轮 53 条 JVM 测试及 logging lint 通过；未重复设备测试。
+
+## 异常场景补充验收（2026-10-10）
+
+本轮仅完善自动化测试，不修改生产代码或公共 API：
+
+- 队列容量 1、四个等级全部启用，消费者暂停时并发提交 32 条记录：全部拒绝、延迟正文未执行；释放后槽位复用、刷新写入及关闭后拒绝继续验证通过。
+- 目录预算 512 字节，保留期设为 Int.MAX_VALUE 天以排除过期清理，历史文件占满且删除被拒绝：接受与写入失败分别计数，退避期间跳过写入；解除删除故障并推进时钟后恢复，预算内写入成功，无关文件保留。
+- 查询列举返回 null 或抛 SecurityException：返回 Result.failure，原文件不变；后续正常查询恢复。
+- 查询后真实重命名、删除：旧 File 引用读取可能抛 FileNotFoundException，重新查询反映最新路径或空列表，不提供稳定快照。
+
+验证命令：`./gradlew.bat :logging:testDebugUnitTest :logging:lintDebug --console=plain`，56 项 JVM 测试全部通过，logging lint 通过。首轮队列用例因未启用 DEBUG 导致拒绝计数预期错误，已显式启用全部等级后重新通过。
+
+边界：目录预算不是设备物理剩余空间；SecurityException 为列举阶段注入，不代表 Android 挂载权限实测。此前目录占用/重开故障测试继续通过。本轮未填满真实磁盘、改变真实目录权限，已补跑 5 项 Android 15 设备回归及页面接入检查，结果见 [VERIFICATION.md](VERIFICATION.md)。长时间运行、跨版本或 R8 测试仍待验收。

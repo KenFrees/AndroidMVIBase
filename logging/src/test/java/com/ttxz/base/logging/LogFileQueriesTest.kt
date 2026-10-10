@@ -93,4 +93,35 @@ class LogFileQueriesTest {
             assertEquals(files, initialized.logFiles().getOrThrow())
         } finally { context.close(1000); root.deleteRecursively() }
     }
+    @Test fun listingFailuresReturnFailureAndLaterQueriesCanRecover() = runBlocking {
+        val root = Files.createTempDirectory("log-query-list-failure").toFile()
+        try {
+            val file = File(root, "2026-10-10.log").apply { writeText("preserved\n") }
+            val initialization = LogInitialization(true, emptyList(), root.path)
+            val unavailable = queryLogFiles(initialization, null) { null }
+            assertTrue(unavailable.exceptionOrNull() is java.io.IOException)
+            val denied = queryLogFiles(initialization, null) { throw SecurityException("denied") }
+            assertTrue(denied.exceptionOrNull() is SecurityException)
+            assertEquals("preserved\n", file.readText())
+            assertEquals(listOf(file), initialization.logFiles().getOrThrow())
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun returnedFilesAreLiveReferencesAndRequeryReflectsRenameAndDeletion() = runBlocking {
+        val root = Files.createTempDirectory("log-query-race").toFile()
+        try {
+            val original = File(root, "2026-10-10.log").apply { writeText("preserved\n") }
+            val initialization = LogInitialization(true, emptyList(), root.path)
+            val queried = initialization.logFiles().getOrThrow().single()
+            val renamed = File(root, "2026-10-10-000000.log")
+            assertTrue(original.renameTo(renamed))
+            assertFalse(queried.exists())
+            assertThrows(java.io.FileNotFoundException::class.java) { queried.inputStream().use { it.read() } }
+            assertEquals(listOf(renamed), initialization.logFiles().getOrThrow())
+            assertEquals("preserved\n", renamed.readText())
+            assertTrue(renamed.delete())
+            assertTrue(initialization.logFiles().getOrThrow().isEmpty())
+        } finally { root.deleteRecursively() }
+    }
+
 }

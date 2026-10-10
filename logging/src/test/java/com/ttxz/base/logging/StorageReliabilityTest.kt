@@ -123,4 +123,50 @@ class StorageReliabilityTest {
             } finally { files.close() }
         } finally { root.deleteRecursively() }
     }
+    @Test fun exhaustedBudgetWithUndeletableHistoryReportsFailureAndRecovers() = runBlocking {
+        val root = Files.createTempDirectory("log-budget-recovery").toFile()
+        val configured = File(root, "configured").apply { mkdir() }
+        val history = File(configured, "2000-01-01.log").apply { writeText("h".repeat(511) + "\n") }
+        val unrelated = File(configured, "host.txt").apply { writeText("keep") }
+        var denyDeletion = true
+        var nanos = 0L
+        val directory = object : File(configured.path) {
+            override fun listFiles(): Array<File>? = super.listFiles()?.map { file ->
+                if (file == history) object : File(file.path) {
+                    override fun delete(): Boolean = if (denyDeletion) false else super.delete()
+                } else file
+            }?.toTypedArray()
+        }
+        // 排除过期清理，保证历史文件删除只能由目录预算不足触发。
+        val engine = LogEngine(directory, config().copy(retentionDays = Int.MAX_VALUE, maxFileBytes = 256, maxDirectoryBytes = 512),
+            FileRecovery { nanos }) { _, _, _ -> }
+        try {
+            assertTrue(engine.info("Storage", "cannot fit"))
+            engine.flush()
+            assertEquals(1L, engine.status().failed)
+            assertEquals(0L, engine.status().written)
+            assertEquals(512L, history.length())
+            assertEquals("keep", unrelated.readText())
+            assertTrue(engine.info("Storage", "during backoff"))
+            engine.flush()
+            assertEquals(2L, engine.status().failed)
+            denyDeletion = false
+            nanos += 1_000_000_000L
+            assertTrue(engine.info("Storage", "after recovery"))
+            assertTrue(engine.flush().isSuccessful)
+            assertFalse(history.exists())
+            val logs = configured.listFiles()!!.filter { it.extension == "log" }
+            assertEquals(1, logs.size)
+            val text = logs.single().readText()
+            assertTrue(text.contains("after recovery"))
+            assertFalse(text.contains("cannot fit"))
+            assertFalse(text.contains("during backoff"))
+            assertTrue(logs.sumOf { it.length() } <= 512)
+            assertEquals("keep", unrelated.readText())
+            assertEquals(3L, engine.status().accepted)
+            assertEquals(1L, engine.status().written)
+            assertEquals(2L, engine.status().failed)
+        } finally { engine.close(); root.deleteRecursively() }
+    }
+
 }

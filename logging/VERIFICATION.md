@@ -166,3 +166,22 @@ API 26 和 37 没有运行证据，当前 SDK/AVD 未安装对应系统镜像。
 当前 API 以 logging README 的“存储与文件查询”为准。导出专属测试移除，写入/滚动/恢复测试保留，并增加 6 条文件查询测试；当前 53 条 JVM 和 5 条 Android 15 LoggerDeviceTest 全部通过。新增设备断言覆盖初始化失败时查询失败、公开入口查询、指定日期查询与实际正文读取。logging/app lint、app assembleDebug 与测试 APK 编译通过；页面写入/刷新/查询经 phone-harness 验证。本轮未重跑强杀、30 万条压力或分档吞吐，不将历史报告当作本版性能复测。
 
 查询取消复查：公开入口在判断初始化前检查当前协程状态；内部列举阶段注入取消异常，验证取消直接传播而非返回 Result.failure，并覆盖未初始化且调用方已取消的分支。本轮 53 条 JVM 测试及 logging lint 通过；未重复设备测试。
+
+## 异常场景补充验收（2026-10-10）
+
+本轮仅完善自动化测试，不修改生产代码或公共 API：
+
+- 队列容量 1、四个等级全部启用，消费者暂停时并发提交 32 条记录：全部拒绝、延迟正文未执行；释放后槽位复用、刷新写入及关闭后拒绝继续验证通过。
+- 目录预算 512 字节，保留期设为 Int.MAX_VALUE 天以排除过期清理，历史文件占满且删除被拒绝：接受与写入失败分别计数，退避期间跳过写入；解除删除故障并推进时钟后恢复，预算内写入成功，无关文件保留。
+- 查询列举返回 null 或抛 SecurityException：返回 Result.failure，原文件不变；后续正常查询恢复。
+- 查询后真实重命名、删除：旧 File 引用读取可能抛 FileNotFoundException，重新查询反映最新路径或空列表，不提供稳定快照。
+
+验证命令：`./gradlew.bat :logging:testDebugUnitTest :logging:lintDebug --console=plain`，56 项 JVM 测试全部通过，logging lint 通过。首轮队列用例因未启用 DEBUG 导致拒绝计数预期错误，已显式启用全部等级后重新通过。
+
+边界：目录预算不是设备物理剩余空间；SecurityException 为列举阶段注入，不代表 Android 挂载权限实测。此前目录占用/重开故障测试继续通过。本轮未填满真实磁盘、改变真实目录权限，已补跑 5 项 Android 15 设备回归及页面接入检查，结果见 [VERIFICATION.md](VERIFICATION.md)。长时间运行、跨版本或 R8 测试仍待验收。
+
+### Android 15 实机复验（2026-10-10）
+
+通过 phone-harness Skill 操作已连接 DAYU_A6（API 35）：再次运行接入检查，应用累计接受/写入从 9/9 增至 12/12，拒绝与失败均为 0；DEBUG 过滤，INFO/WARN/ERROR 正文与多行异常核对 6/6。文件查询返回实际外部应用目录下的 2026-10-10.log，有限预览显示原有异常换行。
+
+`:logging:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.ttxz.base.logging.LoggerDeviceTest` 通过，覆盖外部存储不可用、公共 Logger 复用、UTF-8 大记录、目录/分片/多行堆栈、主线程提交及重开，共 5 项设备测试。此次新增的预算和查询故障注入仍是 JVM 证据，未宣称在设备上复现真实磁盘耗尽或权限变化。未进行按钮闪烁逐帧测量、长时间运行或其他版本验证。

@@ -11,20 +11,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class QueueConcurrencyTest {
-    @Test fun fullQueueRejectsConcurrentProducersWithoutPreparingBodyAndSlotsRemainReusable() = runBlocking {
+    @Test fun fullQueueRejectsAllLevelsConcurrentlyWithoutPreparingBodyAndSlotsRemainReusable() = runBlocking {
         val root = Files.createTempDirectory("queue-concurrency").toFile()
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
         val prepared = AtomicInteger()
         val pool = Executors.newFixedThreadPool(8)
         val engine = LogEngine(File(root, "logs"),
-            LogConfig(queueCapacity = 1, logcatMinLevel = null, redact = {
+            LogConfig(queueCapacity = 1, fileMinLevel = LogLevel.DEBUG, logcatMinLevel = null, redact = {
                 entered.countDown(); check(release.await(10, TimeUnit.SECONDS)); it
             })) { _, _, _ -> }
         try {
             assertTrue(engine.info("Test", "first")); assertTrue(entered.await(5, TimeUnit.SECONDS))
-            val tasks = (0 until 32).map { pool.submit<Boolean> {
-                engine.recordLazy(LogLevel.INFO, "Test", null) { prepared.incrementAndGet(); "unexpected" }
+            val tasks = (0 until 32).map { index -> pool.submit<Boolean> {
+                engine.recordLazy(LogLevel.entries[index % LogLevel.entries.size], "Test", null) { prepared.incrementAndGet(); "unexpected" }
             } }
             tasks.forEach { assertFalse(it.get(1, TimeUnit.SECONDS)) }
             assertEquals(0, prepared.get()); assertEquals(32L, engine.status().dropped)
