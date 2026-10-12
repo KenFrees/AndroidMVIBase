@@ -341,3 +341,31 @@ DAYU_A6 / 3127RH1010015919，安装当前 release 测试签名包（保留已有
 | 2026-10-06-900000.log | 48890 | 500 | 17a4e871583105b6e7eb8717f73eefa0210883d59be99829cf94519d33bc6a53 | gzip retained on October 12 |
 
 已核对设备源文件摘要与本地清单一致，随后启动 app。10 月 5、6 日文件启动后自动压缩；10 月 10 日两片保留普通日志。10 月 12 日应删除 5 日归档、保留 6 日归档、今日两片分别压缩；对保留归档解压后的字节计算摘要并核对记录数。不修改设备时钟，不承诺退出进程后午夜自动执行；验收时先记录启动前现场，再启动 app 等待维护后重新核对。原始 fixture、清单和设备列表在 logging/build/cross-day-20261010；此表保留验收基线。
+
+### 真机跨日验收结果（2026-10-12）
+
+DAYU_A6 / Android 15，设备日期 2026-10-12。先记录现场并拉取副本，没有先启动或重装 app；pidof 无输出，示例进程未运行。启动前，10 日两个 900000/900001 分片均已成为各自 .log.gz，分别解压为 2288890 字节、23000 条，SHA-256 与 10 月 10 日基线完全一致；6 日和5 日归档也均与基线一致。随后启动 app，5 日归档按最近7个日历日规则删除，6 日归档保留且解压为48890字节、500条、摘要一致，10 日两片保留且摘要不变。符合约定：停进程不运行维护，启动补清理。本次没有连续采集午夜时间点，证据是自然经过两天后的状态与启动维护结果，不能据此声称精确午夜触发。
+
+现场副本与列表：logging/build/cross-day-20261012/{before,after}、before.txt、after.txt。未删除真机示例日志；作为验收数据继续保留。
+
+### 隔离真实 ENOSPC 与模拟器 Doze（2026-10-12）
+
+API37专用模拟器挂载1MiB tmpfs到/data/local/tmp/logging-enospc，未填满主磁盘或真机。DiskFullDeviceTest 显式传diskFullDirectory才执行，默认跳过；确认挂载总容量不超过2MiB，实际写满直至 IOException ENOSPC，真实日志引擎刷新报告失败、旧历史源文件内容保留，删除填充文件并等待退避后，恢复记录可在文件中读取，测试 OK (1 test)。计数failed=1；written=2是追加缓冲计数，不代表满盘期间记录可靠落盘。模拟器测试期间临时关闭SELinux以访问隔离挂载点，结束后已卸载、移除空挂载目录并恢复Enforcing。报告logging/build/enospc-results.txt、enospc-metrics.txt。
+
+另在模拟器优化release示例宿主（非instrumentation）启动后切后台熄屏、battery unplug、deviceidle force-idle，确认deep=IDLE，放入1588890字节/20000条历史文件，Doze期间该文件仍被压缩；解除强制idle并恢复battery后deep=ACTIVE、宿主PID未变，归档解压大小、记录数及SHA-256一致。此模拟器/ADB活动条件下未阻止维护，不等于模拟了CPU完全挂起，也不保证所有厂商Doze允许后台执行。临时设置已还原，模拟器已关闭。证据logging/build/doze-check，摘要f65519544d733c83988c60b5ffd2a2d5839529f4cb30be101179ba834c7a5679。
+
+### 真机历史压缩与20分钟持续写入（2026-10-12）
+
+DAYU_A6 / API35，LoggerSoakDeviceTest 显式 soakMinutes=20、soakArchives=true，独立测试目录预置4个2MiB随机历史分片，真实引擎自动压缩；主线程每100ms提交10条，包含每100条一次WARN堆栈，正文100个汉字。20轮共120000条，实际1255836毫秒（约20分56秒，包含扫描/GC）；accepted=120000、dropped=0、failed=0，逐分钟刷新并核对最近6000条无缺失、无重复，历史压缩、滚动和容量清理断言均通过。采样最大目录20792614字节，小于20MiB预算；更早记录允许被正常容量清理，不声称120000条全部长期留存。
+
+GC后基线2358960字节，最大保留增长135296字节（约132KiB），采样堆峰值8527664字节（约8.13MiB），最大单次提交6239微秒（约6.24ms）。包含instrumentation开销，仅为本设备本速率结果，不是吞吐上限或百分位延迟。历史压缩发生在开始阶段，不是全程持续压缩。前半程发送SLEEP，实测Wakefulness=Asleep，deep idle仍为ACTIVE；第12轮检查时设备已Awake，未再次熄屏。真机未强制Doze或更改电池设置；instrumentation后台存活不等同于正式宿主所有厂商后台限制。
+
+最终OK (1 test)，finally关闭引擎并清理独立测试目录，设备列举确认测试files目录无残留；示例应用7个跨日归档保留。报告logging/build/physical-archive-20min.txt，构建与lint见final-reliability-build.txt，JVM回归任务成功且因生产源码无改动为UP-TO-DATE（未声称重新执行全部单测）。本轮未修改生产代码；新增DiskFullDeviceTest与长稳历史压缩开关。仍不承诺断电持久性、厂商主动杀进程后的自动唤醒；真实断电、拔存储、各厂商长期后台策略不在此次验收范围。
+
+### 验收测试自身审查修复（2026-10-12）
+
+修正长稳滚动判据：只认当日未压缩编号分片，预置历史文件不再让files.size>1提前成立。前述20分钟运行的数据和目录证据保留，但其旧滚动判据过宽；修正后在API37补跑2分钟历史归档回归，12000条、dropped=0、failed=0、archiveObserved=true、rolled=true，OK (1 test)，报告logging/build/review-fix-soak.txt。未重复20分钟真机测试，不将2分钟修正后结果冒称20分钟。
+
+满盘测试从准备阶段即覆盖finally，关闭引擎失败也执行清理，删除失败时仍尝试其余文件。API37隔离1MiB挂载点真实ENOSPC恢复重跑OK (1 test)，见review-fix-enospc.txt；再故意预建test-filler.bin目录，使准备阶段抛非ENOSPC错误，测试按预期失败，随后ls确认挂载点只剩 . 和 ..，证明准备失败清理生效。负向运行见review-fix-enospc-intentional-failure.txt，清理证据review-fix-enospc-cleanup.txt，不计作通过用例。挂载及SELinux已还原，模拟器关闭。新测试APK构建、lint、git diff --check通过。未修改生产代码。
+
+长稳测试后续清理修复：外部目录不可用时显式失败；从历史文件生成前覆盖外层try/finally，引擎创建和执行失败均清理本次UUID目录，关闭失败也不跳过目录删除，清理失败显式报告。此次仅调整测试资源生命周期，设备测试APK构建、lint与差异检查通过（logging/build/soak-cleanup-fix-build.txt）；未为此重复设备负载测试，不将此前运行标记为此修复后的实测。

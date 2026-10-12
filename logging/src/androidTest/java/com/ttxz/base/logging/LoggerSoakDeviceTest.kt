@@ -21,26 +21,43 @@ class LoggerSoakDeviceTest {
         require(minutes!! in 1..1440)
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val config = LogConfig(directoryName = "soak-${UUID.randomUUID()}", logcatMinLevel = null)
-        val engine = LogEngine.create(instrumentation.targetContext, config)
-        val root = File(engine.logDirectory)
-        val payload = "测".repeat(100)
-        val exception = IllegalStateException("长稳测试异常").apply {
-            stackTrace = arrayOf(StackTraceElement("Soak", "submit", "Soak.kt", 1))
-        }
-        val heaps = LongArray(minutes + 1)
-        var peakHeap = 0L
-        var maxSubmitNanos = 0L
-        var maxDirectoryBytes = 0L
-        var rolled = false
-        var cleaned = false
-        var previousFiles = emptySet<String>()
-        fun heap() = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
-        suspend fun settle(): Long { System.gc(); delay(100); System.gc(); delay(100); return heap() }
-        fun report(message: String) {
-            instrumentation.sendStatus(0, android.os.Bundle().apply { putString("stream", "$message\n") })
-            Log.i("LOGGER_SOAK", message)
-        }
+        val withArchives = InstrumentationRegistry.getArguments().getString("soakArchives") == "true"
+        val externalRoot = checkNotNull(instrumentation.targetContext.getExternalFilesDir(null)) { "External test storage unavailable" }
+        val root = File(externalRoot, config.directoryName)
+        var ownedEngine: LogEngine? = null
         try {
+            if (withArchives) {
+                check(root.mkdirs()) { "Cannot create archive fixture directory" }
+                val directory = root
+                val day = java.time.LocalDate.now(config.zoneId).minusDays(1)
+                val random = java.util.Random(73)
+                repeat(4) { index ->
+                    File(directory, "$day-${index.toString().padStart(6, '0')}.log").outputStream().use { output ->
+                        val buffer = ByteArray(8192)
+                        repeat(256) { random.nextBytes(buffer); output.write(buffer) }
+                    }
+                }
+            }
+            val engine = LogEngine.create(instrumentation.targetContext, config)
+            ownedEngine = engine
+            val payload = "测".repeat(100)
+            val exception = IllegalStateException("长稳测试异常").apply {
+                stackTrace = arrayOf(StackTraceElement("Soak", "submit", "Soak.kt", 1))
+            }
+            val heaps = LongArray(minutes + 1)
+            var peakHeap = 0L
+            var maxSubmitNanos = 0L
+            var maxDirectoryBytes = 0L
+            var archiveObserved = false
+            var rolled = false
+            var cleaned = false
+            var previousFiles = emptySet<String>()
+            fun heap() = Runtime.getRuntime().let { it.totalMemory() - it.freeMemory() }
+            suspend fun settle(): Long { System.gc(); delay(100); System.gc(); delay(100); return heap() }
+            fun report(message: String) {
+                instrumentation.sendStatus(0, android.os.Bundle().apply { putString("stream", "$message\n") })
+                Log.i("LOGGER_SOAK", message)
+            }
             assertTrue(engine.info("Soak", "warmup"))
             assertTrue(engine.flush().isSuccessful)
             heaps[0] = settle()
@@ -73,10 +90,15 @@ class LoggerSoakDeviceTest {
                 assertEquals(before.dropped, status.dropped)
                 assertEquals(0L, status.failed)
                 val files = root.listFiles()!!.filter { it.extension == "log" || it.name.endsWith(".log.gz") }
+                archiveObserved = archiveObserved || files.any { it.name.endsWith(".log.gz") }
                 val bytes = files.sumOf { it.length() }
                 assertTrue("Directory budget exceeded: $bytes", bytes <= config.maxDirectoryBytes)
                 maxDirectoryBytes = maxOf(maxDirectoryBytes, bytes)
-                rolled = rolled || files.size > 1
+                // 历史归档不算本次写入滚动；首次滚动后当日文件名必带编号。
+                val currentDay = java.time.LocalDate.now(config.zoneId).toString()
+                rolled = rolled || files.any {
+                    it.name.startsWith("$currentDay-") && it.name.endsWith(".log")
+                }
                 val names = files.map { it.name.removeSuffix(".gz") }.toSet()
                 // 首次滚动会把无序号文件重命名，不能将该消失误报为容量清理。
                 cleaned = cleaned || (previousFiles - names).any { it.matches(Regex(".*-\\d{6}\\.log(?:\\.gz)?")) }
@@ -104,10 +126,15 @@ class LoggerSoakDeviceTest {
                     heaps[minute + 1] - heaps[0] < 16L * 1024 * 1024)
                 report("LOGGER_SOAK minute=${minute + 1}/$minutes elapsedMs=${(System.nanoTime() - started) / 1_000_000} accepted=${status.accepted - before.accepted} dropped=${status.dropped - before.dropped} failed=${status.failed} bytes=$bytes files=${files.size} heapAfterGc=${heaps[minute + 1]} sampledPeakHeap=$peakHeap maxSubmitUs=${maxSubmitNanos / 1000}")
             }
+            if (withArchives) {
+                assertTrue("No archive completed", archiveObserved)
+            }
             if (minutes >= 20) { assertTrue("No rollover observed", rolled); assertTrue("No budget cleanup observed", cleaned) }
-            report("LOGGER_SOAK_PASS api=${android.os.Build.VERSION.SDK_INT} minutes=$minutes elapsedMs=${(System.nanoTime() - started) / 1_000_000} attempts=${minutes * 6000L} baselineHeap=${heaps[0]} maxRetainedGrowth=${heaps.max() - heaps[0]} sampledPeakHeap=$peakHeap maxSubmitUs=${maxSubmitNanos / 1000} maxDirectoryBytes=$maxDirectoryBytes rolled=$rolled cleaned=$cleaned")
+            report("LOGGER_SOAK_PASS api=${android.os.Build.VERSION.SDK_INT} minutes=$minutes elapsedMs=${(System.nanoTime() - started) / 1_000_000} attempts=${minutes * 6000L} baselineHeap=${heaps[0]} maxRetainedGrowth=${heaps.max() - heaps[0]} sampledPeakHeap=$peakHeap maxSubmitUs=${maxSubmitNanos / 1000} maxDirectoryBytes=$maxDirectoryBytes withArchives=$withArchives archiveObserved=$archiveObserved rolled=$rolled cleaned=$cleaned")
         } finally {
-            try { engine.close() } finally { root.deleteRecursively() }
+            try { ownedEngine?.close() } finally {
+                check(!root.exists() || root.deleteRecursively()) { "Cannot clean soak test directory" }
+            }
         }
     }
 }
