@@ -17,9 +17,15 @@ import kotlinx.coroutines.launch
 class PostDemoViewModel @Inject constructor(
     private val repository: PostRepository,
 ) : ViewModel() {
+
+    // 私有可变状态：仅供 ViewModel 内部更新 (_uiState.value = ...)
     private val _uiState = MutableStateFlow<PostDemoUiState>(PostDemoUiState.Idle)
+    // 公开只读状态：用 asStateFlow() 将 MutableStateFlow 转换为只读 StateFlow，防止 UI 篡改状态，重绘不丢失
     val uiState = _uiState.asStateFlow()
+
+    // 私有可变效果：仅供 ViewModel 内部触发 (_effects.tryEmit(...))
     private val _effects = MutableSharedFlow<PostDemoEffect>(extraBufferCapacity = 1)
+    // 公开只读效果：用 asSharedFlow() 将 MutableSharedFlow 转换为只读 SharedFlow，防止 UI 篡改事件，用完即毁不重放
     val effects = _effects.asSharedFlow()
 
     /** 处理页面操作；请求中忽略重复点击，离开页面时协程随 ViewModel 取消。 */
