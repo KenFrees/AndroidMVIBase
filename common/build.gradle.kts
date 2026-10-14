@@ -27,5 +27,8 @@ kotlin {
 }
 
 dependencies {
-    implementation(libs.kotlinx.coroutines.core)
+    // 公共 API 暴露 StateFlow / SharedFlow，并继承 AndroidX ViewModel。
+    api(libs.kotlinx.coroutines.core)
+    api(libs.androidx.lifecycle.viewmodel.ktx)
+    testImplementation(libs.junit)
 }

@@ -2,7 +2,7 @@
 
 ## 职责与当前能力
 
-app 用于启动、展示和验证基础模块。首页提供 UI 组件、网络请求和日志测试入口；UI 演示页包含 Loading 弹窗及三类 Toast，网络演示页调用 JSONPlaceholder 文章接口。尚未实现登录、网络列表页或通用 MVI 基类。
+app 用于启动、展示和验证基础模块。首页提供 UI 组件、网络请求和日志测试入口；UI 演示页包含 Loading 弹窗及三类 Toast，网络演示页调用 JSONPlaceholder 文章接口并接入 common 的轻量 MVI 基类。尚未实现登录或网络列表页。
 
 应用 ID / 命名空间为 `com.ttxz.base`，minSdk 26；依赖 common、network 和 ui，并配置 Compose、Hilt、KSP。
 
@@ -51,16 +51,16 @@ Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显
 1. 看 Manifest → BaseApp：系统如何找到 Application，Hilt 从哪里进入？
 2. 看 MainActivity → setContent → Theme → NavHost → HomeScreen / UiComponentsScreen：Compose 如何组织页面与返回？
 3. 看 Gradle 依赖：为什么 app 同时依赖 common 和 network？
-4. 看 UI 演示页按钮如何控制 [LoadingDialog](../ui/components/loading-dialog.md) 并发送 Toast；再沿网络页的 Action → ViewModel → Repository → API → UiState / Effect → Compose 追踪一次请求。网络页用 StateFlow 保存持续状态，用不重放的 SharedFlow 触发当前页面的一次性 Toast；此例不代表通用 MVI 基类已设计完成。
+4. 看 UI 演示页按钮如何控制 [LoadingDialog](../ui/components/loading-dialog.md) 并发送 Toast；再沿网络页的 Action → ViewModel → Repository → API → UiState / Effect → Compose 追踪一次请求。文章 ViewModel 继承 [common.mvi.BaseViewModel](../common/README.md#轻量-mvi-的使用与边界)，由基类创建 StateFlow / SharedFlow，业务状态、请求门控和错误映射留在具体 ViewModel。状态使用 collectAsStateWithLifecycle；效果通过 repeatOnLifecycle(STARTED) 收集，停止收集期间的 Toast 允许遗漏，返回页面后仍能读取最新状态。
 
-练习：在网络页分别请求文章和 404，找到两个 Action 如何经过 Repository 更新 UiState 并发送 Effect；在请求中返回首页，观察请求是否随页面退出而取消。
+练习：在网络页分别请求文章和 404，找到两个 Action 如何经过 Repository 更新 UiState 并发送 Effect；在请求中返回首页，观察 ViewModel 清除时请求是否取消；再测试请求中切到后台和旋转屏幕，核对最新 UiState 与临时提示的不同交付行为。
 
 本步通过标准：能追踪应用启动到欢迎页面的调用关系，并分清宿主和基础模块的职责。
 
 ## 验证与当前限制
 
-- 当前测试目录是模板示例，不覆盖业务网络、MVI 或真实用户流程。
-- Navigation Compose 目前只用于首页与演示页之间的导航；文章示例有具体 ViewModel，但尚无通用 MVI 基类。
+- app 当前测试目录是模板示例，不覆盖业务网络或真实用户流程；common 的 MVI 单测覆盖状态更新及临时效果流契约，不能替代文章页设备验收。
+- Navigation Compose 目前只用于首页与演示页之间的导航；文章示例接入 common 的轻量 MVI 基类，不包含通用列表、请求或事件确认系统。
 - 标准 release 已启用 R8 代码优化和资源压缩，日志接入在 API 35 实机通过；日志页跨版本验收见 logging/VERIFICATION.md；发布签名和其他网络/UI 全流程仍未完成。
 - network 已修正取消传播；日志策略和环境地址配置仍待完善，详见该模块 README。
 - 已完成的 Debug 构建记录见 [项目 README](../README.md)，后续修改须提供本次验证结果。

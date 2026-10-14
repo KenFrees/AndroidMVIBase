@@ -20,6 +20,7 @@ description: Use when integrating AndroidMVIBase into a business Android project
 | 使用内容 | 对应说明 |
 | --- | --- |
 | 结果分支与回调 | [common README](../../common/README.md) |
+| 轻量 MVI 基类与状态/效果边界 | [common README](../../common/README.md#轻量-mvi-的使用与边界)：common.mvi.BaseViewModel；状态不可变，Lambda 原子更新且无副作用；sendEffect 在调用者协程中挂起发送，无订阅者丢弃、不重放，不保证 UI 执行；必须保留的结果写入 UiState，UI 按生命周期收集 |
 | Retrofit/Moshi/OkHttp、异常包装 | [network README](../../network/README.md) |
 | Compose 界面组件（Loading、Toast） | [UI 组件目录](../../ui/components/README.md) |
 | 本地诊断日志 | [logging README](../../logging/README.md)：Application.onCreate 调用 Logging.initialize，业务使用 Logging.getLogger(name) 缓存固定名称，所有等级支持可选 Throwable 和延迟正文，先判断等级和容量再执行 lambda；普通正文不截断，队列仅限条数；所有线程满时立即拒绝，不等待队列空间；单文件大小是滚动阈值，目录总预算独立生效；清理内部固定每小时检查，不公开 cleanupIntervalMillis；数值配置仅校验正数和必要关系，默认值仍建议优先使用；记录 true 不等于已写入；挂起刷新/文件查询，单目录单实例，正式环境配置等级和脱敏；非法日期格式回退默认，其他非法配置停用实例，通过初始化结果 enabled / warnings 查询，directory 为实际目录路径；初始化直接输出中文 Logcat 反馈，不受 logcatMinLevel 影响，成功不代表磁盘写入已验证；flush/logFiles/close/status 由 Logging 统一管理；日志异常 message 每层最多保留 512 个 UTF-16 字符单元，与正文统一脱敏，脱敏失败只丢弃当前记录并保留健康文件流；单条超过总目录预算不触发磁盘退避。logFiles(date) 在 IO 线程查询实际目录，返回 Result<List<File>>，支持日期筛选及从新到旧排序；无文件为空列表，读取失败返回 failure，取消传播。查询不刷新、不复制，文件可能追加、滚动重命名或清理；读取与复制由宿主处理。无 ZIP 导出。 |
@@ -34,7 +35,8 @@ description: Use when integrating AndroidMVIBase into a business Android project
 4. 使用 AppResult 时完整区分 Success、Error、Loading；safeApiCall 不产生 Loading、不主动切线程、不自动解析业务失败码。onSuccess/onError 返回原结果，回调异常不会自动转换成 Error。
 5. 若 Retrofit API 返回 Response<T>，明确检查 HTTP 成功状态，不将 Success<Response<T>> 直接等同于请求成功。
 6. `safeApiCall` 目前会传播协程取消；使用前仍需核对日志和固定 Base URL 的限制。缺陷或缺少配置入口阻碍接入时，报告证据及影响，提出框架侧改进需求；未经授权不自行补丁框架或修改另一个仓库。
-7. 记录业务工程实际接入方式并验证相关调用。原框架 Debug 构建成功不等于当前业务工程已集成或设备已验证。
+7. 接入 MVI 时使用 common.mvi 的 BaseViewModel，具体 Action / State / Effect 放在业务功能包；基类只提供容器与发送机制，不自动串行化 Action、管理请求或恢复进程。State 应不可变，基于已有字段计算时使用 updateUiState Lambda 且不执行副作用；sendEffect 为挂起函数，不建立隐藏作用域。UiState 使用 collectAsStateWithLifecycle，临时 Effect 在 LaunchedEffect 内结合 repeatOnLifecycle(STARTED) 收集；可遗漏提示才能使用该效果流，不把它当可靠业务结果通道。Compose 生命周期/Hilt 等依赖由宿主提供，详见 common README。
+8. 记录业务工程实际接入方式并验证相关调用。原框架 Debug 构建成功不等于当前业务工程已集成或设备已验证。
 
 ## 使用方式 Review
 

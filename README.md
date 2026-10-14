@@ -9,20 +9,20 @@
 | 模块 | 当前能力 | 阅读入口 |
 | --- | --- | --- |
 | `app` | Application、Hilt 入口、Compose 欢迎页、UI 与网络请求示例 | [app/README.md](app/README.md) |
-| `common` | `AppResult` 以及成功、失败回调扩展 | [common/README.md](common/README.md) |
+| `common` | `AppResult`、结果回调扩展、轻量 MVI 基类与角色契约 | [common/README.md](common/README.md) |
 | `network` | Hilt 提供网络对象、Moshi 转换、`safeApiCall` | [network/README.md](network/README.md) |
 | `ui` | Compose 公共组件，当前包含加载弹窗与三类消息提示 | [ui/README.md](ui/README.md) |
 | `logging` | Kotlin 本地诊断日志、固定格式、有界异步写入、滚动清理和日志文件查询 | [logging/README.md](logging/README.md) |
 
 当前 Gradle 依赖：`app → network → common`，同时 `app → common`、`app → ui`、`app → logging`。这些是模块依赖，不代表 UI 应直接请求网络。
 
-MVI 基类、列表页、统一业务错误码、登录态、离线存储均未完成。app 已有单篇文章的 Action / UiState / Effect 与 Repository / ViewModel 演示；依赖已引入不等于通用能力已封装。
+common 已提供轻量 MVI 基类，统一只读状态流、原子状态更新和不重放的临时效果广播；app 单篇文章示例已接入。列表页、统一业务错误码、登录态、离线存储均未完成。基类不保证效果可靠交付，也不提供进程恢复或 Action 串行队列。
 
 ## 技术与工程约定
 
 - Kotlin、Compose + Material3、Hilt + KSP、Retrofit + OkHttp + Moshi。
 - 异步采用 Coroutines，后续以 Flow / StateFlow 组织数据与 UI 状态。
-- 表现层采用轻量 MVI；app 文章示例使用 Action / UiState / Effect，通用基类 API 仍待设计。
+- 表现层采用轻量 MVI；common.mvi 提供 BaseViewModel 和 UiAction / UiState / UiEffect，业务类型和请求策略由页面提供，见 [common 接入说明](common/README.md#轻量-mvi-的使用与边界)。
 - 包名前缀 `com.ttxz.base`，最低 Android API 26。
 - 模块与 `app` 同级；本仓库本身就是基础框架，不再套 `core/`。
 - 依赖版本集中在 [libs.versions.toml](gradle/libs.versions.toml)，构建工具版本以文件实际配置为准。
@@ -47,7 +47,7 @@ MVI 基类、列表页、统一业务错误码、登录态、离线存储均未�
 | 2 | `AppResult`、泛型、sealed interface、结果与 UI 状态的区别 | 能解释 Success / Error / Loading 的语义 | **建议从这里开始学习** |
 | 3 | Retrofit → Moshi → `safeApiCall`、协程取消与错误映射 | 修正取消异常处理，验证 HTTP/IO/取消分支 | 取消已修正并单测；HTTP/IO 专项测试待补 |
 | 4 | 网络环境配置、日志范围、服务注入 | 明确开发与正式环境的网络行为并验证 | 待开展 |
-| 5 | 轻量 MVI 的状态、用户操作与一次性效果 | app 文章示例已采用 Action / UiState / Effect；通用基类须根据复用场景再设计 | 示例已实现，基类待设计 |
+| 5 | 轻量 MVI 的状态、用户操作与临时效果 | common 基类统一容器；文章示例接入，明确原子更新和效果交付边界 | 基类与示例已实现，设备验收待做 |
 | 6 | API → Repository → ViewModel → Compose | 完整示例请求，覆盖加载、成功、失败与重试 | app 单篇文章示例已实现，设备验证待做 |
 | 7 | 复用与 AI Review | 用第二个功能检查规范是否够用，按实际代码完善 Skill | 待开展 |
 

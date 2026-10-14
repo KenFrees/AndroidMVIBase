@@ -22,7 +22,10 @@ import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.ttxz.base.R
 import com.ttxz.base.ui.loading.LoadingDialog
 import com.ttxz.base.ui.toast.ToastDuration
@@ -36,25 +39,28 @@ fun PostDemoScreen(onBack: () -> Unit, viewModel: PostDemoViewModel = hiltViewMo
     val isLoading = uiState == PostDemoUiState.Loading
     val toastHostState = rememberToastHostState()
     val resources = LocalResources.current
+    val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(viewModel, toastHostState, resources) {
-        viewModel.effects.collect { effect ->
-            when (effect) {
-                PostDemoEffect.Success -> toastHostState.showSuccess(
-                    resources.getString(R.string.network_demo_success_toast),
-                )
-                is PostDemoEffect.Failure -> toastHostState.showFailure(
-                    message = when {
-                        effect.httpCode != null -> resources.getString(
-                            R.string.network_demo_http_error, effect.httpCode,
-                        )
-                        effect.isCertificateError -> resources.getString(
-                            R.string.network_demo_certificate_error,
-                        )
-                        else -> resources.getString(R.string.network_demo_connection_error)
-                    },
-                    duration = ToastDuration.LONG,
-                )
+    LaunchedEffect(viewModel, toastHostState, resources, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            viewModel.effects.collect { effect ->
+                when (effect) {
+                    PostDemoEffect.Success -> toastHostState.showSuccess(
+                        resources.getString(R.string.network_demo_success_toast),
+                    )
+                    is PostDemoEffect.Failure -> toastHostState.showFailure(
+                        message = when {
+                            effect.httpCode != null -> resources.getString(
+                                R.string.network_demo_http_error, effect.httpCode,
+                            )
+                            effect.isCertificateError -> resources.getString(
+                                R.string.network_demo_certificate_error,
+                            )
+                            else -> resources.getString(R.string.network_demo_connection_error)
+                        },
+                        duration = ToastDuration.LONG,
+                    )
+                }
             }
         }
     }
