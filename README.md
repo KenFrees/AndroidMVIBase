@@ -30,6 +30,28 @@ common 已提供轻量 MVI 基类，统一只读状态流、原子状态更新�
 
 2026-10-22 Kotlin 升级验证：`:app:assembleDebug :app:assembleRelease testDebugUnitTest lintDebug` 通过，82 项 JVM 单测无失败，lint 为 0 错误、24 警告（依赖更新提示、标签及未使用资源）。`buildEnvironment` 确认 KGP 2.4.21，ui 的 `dependencyInsight` 确认 kotlin-stdlib 2.4.21 与 Coil 3.6.3。未执行设备验收。Kotlin 官方兼容表对 2.4.21 的 AGP 完整支持范围截至 9.3.1；当前 AGP 9.4.0 的结论以本次项目构建为限，见 [兼容表](https://kotlinlang.org/docs/gradle-configure-project.html)。
 
+### 2026-10-22 稳定依赖升级
+
+以下为本轮版本配置；第一批处理 AndroidX/构建补丁，第二批处理网络库。Gradle 保持 9.6.0，daemon JDK 保持 25，Java/Kotlin 字节码目标保持 11，minSdk 保持 26。
+
+| 依赖 | 原版本 | 本轮版本 |
+| --- | --- | --- |
+| AGP | 9.4.0 | 9.4.1 |
+| Core KTX | 1.19.0 | 1.19.1 |
+| Compose BOM | 2026.02.01 | 2026.09.00 |
+| Lifecycle | 2.9.4 | 2.11.0 |
+| Navigation Compose | 2.9.3 | 2.10.2 |
+| AndroidX Hilt Compose | 1.2.0 | 1.4.0 |
+| Coroutines | 1.10.2 | 1.11.0 |
+| Retrofit / Moshi Converter | 2.11.0 | 3.0.0 |
+| OkHttp / 日志拦截器 | 4.12.0 | 5.5.1 |
+
+Hilt Compose 改用 hilt-lifecycle-viewmodel-compose，文章页的 hiltViewModel 导入改为 androidx.hilt.lifecycle.viewmodel.compose。Kotlin/Compose 编译插件 2.4.21、KSP 2.3.12、Dagger Hilt 2.60.1、Coil 3.6.3、Activity 1.13.0 及现有测试依赖保持；Moshi 保持稳定版 1.15.2，不使用 2.0 alpha。
+
+公开 API 和宿主初始化方式不变。网络集成测试范围见 [network](network/README.md#如何验证修改)。
+
+验证：两批分别通过 Debug/Release（含 Hilt/KSP、R8）、单测和 lint。第一批为 82 项单测，第二批新增 4 项网络集成测试后共 86 项，均无失败；lint 为 0 错误、8 警告。app 的 debugRuntimeClasspath 已确认解析到目标版本，MockWebServer 不在应用运行时依赖中。DAYU_A6（API 35，Debug）通过文章成功/404、加载弹窗结束、导航返回、Coil NETWORK/MEMORY_CACHE 和长时消息显示检查。Release 仅验证构建，未做安装运行；其他 Android 版本、本地 Uri、在途请求取消与完整前后台场景未在本轮验收。
+
 ## 怎样一步步学习
 
 每一步都按以下方式推进：
@@ -48,10 +70,10 @@ common 已提供轻量 MVI 基类，统一只读状态流、原子状态更新�
 | --- | --- | --- | --- |
 | 1 | 模块依赖、Hilt/KSP 与构建关系 | 空工程可构建，能解释三个模块职责 | 骨架已建立 |
 | 2 | `AppResult`、泛型、sealed interface、结果与 UI 状态的区别 | 能解释 Success / Error / Loading 的语义 | **建议从这里开始学习** |
-| 3 | Retrofit → Moshi → `safeApiCall`、协程取消与错误映射 | 修正取消异常处理，验证 HTTP/IO/取消分支 | 取消已修正并单测；HTTP/IO 专项测试待补 |
+| 3 | Retrofit → Moshi → `safeApiCall`、协程取消与错误映射 | 修正取消异常处理，验证 HTTP/IO/取消分支 | 取消单测及成功/404/解析错误/读取超时集成测试通过；空响应、在途取消等待补 |
 | 4 | 网络环境配置、日志范围、服务注入 | 明确开发与正式环境的网络行为并验证 | 待开展 |
 | 5 | 轻量 MVI 的状态、用户操作与临时效果 | common 基类统一容器；文章示例接入，明确原子更新和效果交付边界 | 基类与示例已实现，设备验收待做 |
-| 6 | API → Repository → ViewModel → Compose | 完整示例请求，覆盖加载、成功、失败与重试 | app 单篇文章示例已实现，设备验证待做 |
+| 6 | API → Repository → ViewModel → Compose | 完整示例请求，覆盖加载、成功、失败与重试 | app 单篇文章示例已实现；API 35 已验证加载/成功/404，其他设备场景待验收 |
 | 7 | 复用与 AI Review | 用第二个功能检查规范是否够用，按实际代码完善 Skill | 待开展 |
 
 这是学习路线，不是对所有后续实现的一次性授权。Room、分页、复杂导航等按真实需求再加入。
@@ -89,7 +111,7 @@ common 已提供轻量 MVI 基类，统一只读状态流、原子状态更新�
 
 当前优先关注：
 
-- `safeApiCall` 已传播协程取消；HTTP / IO 路径和真实服务行为仍需更完整的测试，见 [network 说明](network/README.md)。
+- `safeApiCall` 已传播协程取消；本地成功、404、解析错误、读取超时测试通过，真实业务错误码、空响应及在途取消等仍需验证，见 [network 说明](network/README.md)。
 - 网络日志始终为 BODY，尚未区分 Debug/Release；Base URL 固定为演示服务。
 - 尚无业务响应码、会话过期、重试和离线策略。
 - 规则文档和 Skill 用于引导与检查，不等于编译器层面的架构约束，也不能替代测试与人工 Review。

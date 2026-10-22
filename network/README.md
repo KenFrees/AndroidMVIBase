@@ -101,7 +101,7 @@ class PostRepository @Inject constructor(private val api: PostApi) {
 1. **日志没有区分环境**：BODY 可能记录请求 / 响应正文，正式环境应明确日志开关与敏感信息处理，不能直接照搬当前默认值。
 2. **环境地址固定**：没有向宿主开放 Base URL 配置；JSONPlaceholder 是无认证的演示服务，不提供长期可用性保证，不能直接拿演示地址作为正式服务。
 3. **业务错误未统一**：HTTP 成功不代表服务端业务码成功；目前不解析业务 code/message，也不处理 Token、401 会话失效或刷新。
-4. **没有完整测试链路**：已有协程取消单测，但尚无 MockWebServer 的成功 / HTTP / IO 集成测试；空响应、解析失败、超时、离线等需按契约补测。
+4. **验证边界**：已有取消传播单测，并新增 MockWebServer 本地 HTTP 集成测试，覆盖 JSON 成功解析、HTTP 404、字段类型解析失败和慢响应读取超时。测试复用 NetworkModule 的 Moshi 与 OkHttp 配置，服务器只监听回环地址。TLS/代理证书、空响应、真实离线及在途请求取消仍需专项验证；这些测试不代表正式服务契约已验证。
 
 ## 这一步需要学习什么
 
@@ -121,3 +121,7 @@ class PostRepository @Inject constructor(private val api: PostApi) {
 构建用 `:network:assembleDebug`，宿主集成用 `:app:assembleDebug`；取消语义测试为 `:network:testDebugUnitTest`。修改异常处理时继续补测成功、HTTP、IO 和取消；修改日志/环境注入时分别核对 Debug/Release 行为。
 
 构建成功只说明编译与打包通过，不能证明服务可达、错误契约正确或设备运行正常。公开 API 或配置变化时，同步修改本说明、宿主调用与项目 Skill 中相关规则。
+
+2026-10-22 依赖升级：Retrofit 与 Moshi Converter 统一为 3.0.0，OkHttp 与日志拦截器统一为 5.5.1，Moshi 保持 1.15.2 稳定版。MockWebServer 5.5.1 仅用于 testImplementation，不进入正式 APK。Retrofit 接口仍使用 retrofit2 包名；没有修改 safeApiCall 的签名、业务错误、认证或重试策略。OkHttp 也用于 Coil 的网络请求，设备验收需覆盖文章示例和图片示例。
+
+本轮验证通过：4 项本地 HTTP 集成测试和原有取消传播测试；全项目共 86 项 JVM 单测无失败。Debug/Release（含 R8）、lint 与运行时依赖检查通过。DAYU_A6（API 35，Debug）验证了真实 HTTPS 文章成功/404，以及清理示例图片缓存后的 Coil NETWORK 与重复加载 MEMORY_CACHE；代理证书沿用 Debug 的演示域名配置。未验证 Release 设备运行、完整 TLS/代理矩阵或正式服务的业务码策略。
