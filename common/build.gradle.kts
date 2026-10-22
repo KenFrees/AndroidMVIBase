@@ -27,6 +27,10 @@ kotlin {
 }
 
 dependencies {
+    // common 统一提供图片能力，调用方可直接使用 Coil Compose API。
+    api(platform(libs.androidx.compose.bom))
+    api(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
     // 公共 API 暴露 StateFlow / SharedFlow，并继承 AndroidX ViewModel。
     api(libs.kotlinx.coroutines.core)
     api(libs.androidx.lifecycle.viewmodel.ktx)

@@ -9,7 +9,7 @@
 | 模块 | 当前能力 | 阅读入口 |
 | --- | --- | --- |
 | `app` | Application、Hilt 入口、Compose 欢迎页、UI 与网络请求示例 | [app/README.md](app/README.md) |
-| `common` | `AppResult`、结果回调扩展、轻量 MVI 基类与角色契约 | [common/README.md](common/README.md) |
+| `common` | Application 基类、Coil 图片加载、AppResult、轻量 MVI | [common/README.md](common/README.md) |
 | `network` | Hilt 提供网络对象、Moshi 转换、`safeApiCall` | [network/README.md](network/README.md) |
 | `ui` | Compose 公共组件，当前包含加载弹窗与三类消息提示 | [ui/README.md](ui/README.md) |
 | `logging` | Kotlin 本地诊断日志、固定格式、有界异步写入、滚动清理和日志文件查询 | [logging/README.md](logging/README.md) |
@@ -26,6 +26,9 @@ common 已提供轻量 MVI 基类，统一只读状态流、原子状态更新�
 - 包名前缀 `com.ttxz.base`，最低 Android API 26。
 - 模块与 `app` 同级；本仓库本身就是基础框架，不再套 `core/`。
 - 依赖版本集中在 [libs.versions.toml](gradle/libs.versions.toml)，构建工具版本以文件实际配置为准。
+- Kotlin 与 Compose 编译插件统一为 2.4.21，Coil 为 3.6.3，KSP 保持 2.3.12。沿用 AGP 内置 Kotlin；根工程的 Kotlin 插件版本声明参与构建类路径解析，各 Android 模块无需再应用 kotlin-android。Gradle daemon 使用 JDK 25，Java/Kotlin 字节码目标仍为 11。
+
+2026-10-22 Kotlin 升级验证：`:app:assembleDebug :app:assembleRelease testDebugUnitTest lintDebug` 通过，82 项 JVM 单测无失败，lint 为 0 错误、24 警告（依赖更新提示、标签及未使用资源）。`buildEnvironment` 确认 KGP 2.4.21，ui 的 `dependencyInsight` 确认 kotlin-stdlib 2.4.21 与 Coil 3.6.3。未执行设备验收。Kotlin 官方兼容表对 2.4.21 的 AGP 完整支持范围截至 9.3.1；当前 AGP 9.4.0 的结论以本次项目构建为限，见 [兼容表](https://kotlinlang.org/docs/gradle-configure-project.html)。
 
 ## 怎样一步步学习
 
@@ -92,3 +95,5 @@ common 已提供轻量 MVI 基类，统一只读状态流、原子状态更新�
 - 规则文档和 Skill 用于引导与检查，不等于编译器层面的架构约束，也不能替代测试与人工 Review。
 
 日志库第二阶段：现有 API 35 设备的故障、压力、强杀与页面验收已完成；其他 Android 版本待验收，详见 [可靠性验证](logging/RELIABILITY.md)。
+
+图片加载：common 统一提供 BaseApplication、默认缓存配置及 Coil Compose 依赖，app 提供网络、本地 Uri、失败、空地址演示。DAYU_A6 已验证图片显示、磁盘及内存缓存，本地 Uri 待验收，见 [说明](common/image-loading.md)。

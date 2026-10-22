@@ -3,6 +3,7 @@
     <!-- 仅 Debug 的演示域名信任设备用户 CA，供本地 HTTPS 抓包代理使用。 -->
     <domain-config>
         <domain includeSubdomains="false">jsonplaceholder.typicode.com</domain>
+        <domain includeSubdomains="false">raw.githubusercontent.com</domain>
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />

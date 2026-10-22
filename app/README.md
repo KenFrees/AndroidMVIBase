@@ -6,11 +6,11 @@ app 用于启动、展示和验证基础模块。首页提供 UI 组件、网络
 
 应用 ID / 命名空间为 `com.ttxz.base`，minSdk 26；依赖 common、network 和 ui，并配置 Compose、Hilt、KSP。
 
-同时依赖 [logging](../logging/README.md)，BaseApp.onCreate 初始化 Logging，独立日志测试页按名称复用 Logger。首页提供“日志测试”入口；页面显示实际保存目录，支持正文输入、各等级写入、ERROR 异常堆栈、挂起刷新和查看文件绝对路径。日志默认保存于 getExternalFilesDir(null)/logs，新外部目录及旧内部目录均排除备份。读取、复制或分享日志由上游负责，示例不提供 ZIP 导出。
+同时依赖 [logging](../logging/README.md)，AppApplication.onCreate 初始化 Logging，独立日志测试页按名称复用 Logger。首页提供“日志测试”入口；页面显示实际保存目录，支持正文输入、各等级写入、ERROR 异常堆栈、挂起刷新和查看文件绝对路径。日志默认保存于 getExternalFilesDir(null)/logs，新外部目录及旧内部目录均排除备份。读取、复制或分享日志由上游负责，示例不提供 ZIP 导出。
 
 | 文件 | 作用 |
 | --- | --- |
-| [BaseApp.kt](src/main/java/com/ttxz/base/BaseApp.kt) | 带 `@HiltAndroidApp` 的 Application，Hilt 宿主入口 |
+| [AppApplication.kt](src/main/java/com/ttxz/base/AppApplication.kt) | 继承 common 的 BaseApplication，带 `@HiltAndroidApp`；沿用默认图片配置，初始化宿主日志 |
 | [MainActivity.kt](src/main/java/com/ttxz/base/MainActivity.kt) | `@AndroidEntryPoint` Activity，通过 Navigation Compose 连接首页、UI、网络和日志演示页 |
 | [LogDemoScreen.kt](src/main/java/com/ttxz/base/demo/logging/LogDemoScreen.kt) | 固定 TAG 的各等级日志写入、刷新、累计状态与文件查询演示 |
 | [UiComponentsScreen.kt](src/main/java/com/ttxz/base/demo/ui/UiComponentsScreen.kt) | Loading 和 Toast 的页面内演示状态与按钮 |
@@ -48,7 +48,7 @@ Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显
 
 ## 学习顺序
 
-1. 看 Manifest → BaseApp：系统如何找到 Application，Hilt 从哪里进入？
+1. 看 Manifest → AppApplication：系统如何找到 Application，Hilt 从哪里进入？
 2. 看 MainActivity → setContent → Theme → NavHost → HomeScreen / UiComponentsScreen：Compose 如何组织页面与返回？
 3. 看 Gradle 依赖：为什么 app 同时依赖 common 和 network？
 4. 看 UI 演示页按钮如何控制 [LoadingDialog](../ui/components/loading-dialog.md) 并发送 Toast；再沿网络页的 Action → ViewModel → Repository → API → UiState / Effect → Compose 追踪一次请求。文章 ViewModel 继承 [common.mvi.BaseViewModel](../common/README.md#轻量-mvi-的使用与边界)，由基类创建 StateFlow / SharedFlow，业务状态、请求门控和错误映射留在具体 ViewModel。状态使用 collectAsStateWithLifecycle；效果通过 repeatOnLifecycle(STARTED) 收集，停止收集期间的 Toast 允许遗漏，返回页面后仍能读取最新状态。
@@ -92,3 +92,7 @@ AGP 9.4 的 `release.optimization.enable = true` 使用默认 Android 优化规�
 最终优化 release 已在 API 35 通过该检查，并在刷新后 force-stop/重启，通过新日志核对和历史文件字节比对。该实验不保证未刷新数据、断电持久性或异常多行原子性。
 
 日志页检查和有限预览同时支持 `.log` / `.log.gz`，使用流式解压，不将历史归档整体加载到内存。历史自动压缩契约见 [logging README](../logging/README.md#历史日志自动压缩)。
+
+## 图片加载示例
+
+首页图片加载入口使用 BaseApplication 提供的共享 Coil 加载器，AppApplication 沿用默认配置；详情见 [说明](../common/image-loading.md)。临时 Uri 授权不持久保存；DAYU_A6 已验证图片显示、磁盘与内存缓存，本地 Uri 待验收。

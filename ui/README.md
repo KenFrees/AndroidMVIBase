@@ -1,6 +1,6 @@
 # ui：公共 Compose 组件
 
-`ui` 是与 `app`、`common`、`network` 同级的 Android Library，命名空间为 `com.ttxz.base.ui`，minSdk 26。它提供可复用的 Compose 界面组件，不持有业务或网络状态，也不依赖 `app`。`common` 保留不依赖 Compose 的公共类型。
+`ui` 是与 `app`、`common`、`network` 同级的 Android Library，命名空间为 `com.ttxz.base.ui`，minSdk 26。它提供可复用的 Compose 界面组件，不持有业务或网络状态，也不依赖 `app`。应用基类与统一图片加载由 common 提供，ui 不再持有 Coil 依赖。
 
 ## 查找组件
 
@@ -13,3 +13,7 @@
 ## 验证与限制
 
 学习时先按用途在目录中定位组件，再看用法说明、源码和 app 演示；练习见各组件说明。组件及宿主编译可执行 `:ui:assembleDebug :app:assembleDebug`；外观与交互仍需设备验证。组件目录中的示例会标明真实演示与拟议用法，不能把依赖已加入等同于能力已实现。
+
+## 图片加载
+
+图片能力已整体归入 common，默认配置、宿主基类和页面使用方式见 [图片加载](../common/image-loading.md)。

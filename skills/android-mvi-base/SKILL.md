@@ -73,3 +73,7 @@ Review 先列问题，给文件/行号、触发条件、影响和建议，再列
 logging 历史日志会自动变为 `.log.gz`，查询仍返回 File，调用方按扩展名用 GZIPInputStream 流式读取，不能直接 readText 压缩文件。压缩、滚动或清理可能使已查询 File 失效，处理读取失败并按需重新查询；压缩不是 ZIP 导出，调用方式和预算边界见 logging/README.md。
 
 文件日志固定格式为 `[日期时间] [LEVEL] [TAG] 正文`，LEVEL 为 D/I/W/E（对应 DEBUG/INFO/WARN/ERROR），由调用方法决定；宿主只能配置日期格式和传入 TAG，不能改变前缀结构。
+
+## 图片加载
+
+图片加载整体由 common 提供，阅读 [说明](../../common/image-loading.md)。消费者依赖 common 即可使用其 api 导出的 Coil Compose。宿主继承 common.application.BaseApplication，并在 Manifest 中注册自己的 Application；默认使用 ImageLoadingConfig，可覆盖 imageLoadingConfig()。Hilt 注解和业务、日志初始化保留在宿主，onCreate 调用 super；配置在共享加载器创建时读取，不动态更新。已有 Application 基类时可使用 common.image.createImageLoader 接入 Coil 工厂。页面决定占位、失败、空地址图片，不在页面直接调用工厂或反复创建加载器。

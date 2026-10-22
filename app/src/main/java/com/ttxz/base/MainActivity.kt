@@ -27,6 +27,7 @@ import com.ttxz.base.demo.post.PostDemoScreen
 import com.ttxz.base.ui.theme.AndroidMVIBaseTheme
 import dagger.hilt.android.AndroidEntryPoint
 import com.ttxz.base.demo.logging.LogDemoScreen
+import com.ttxz.base.demo.image.ImageDemoScreen
 
 private const val HOME_ROUTE = "home"
 private const val UI_COMPONENTS_ROUTE = "ui-components"
@@ -47,10 +48,14 @@ class MainActivity : ComponentActivity() {
                             onOpenComponents = { navController.navigate(UI_COMPONENTS_ROUTE) },
                             onOpenNetworkDemo = { navController.navigate(POST_DEMO_ROUTE) },
                             onOpenLogDemo = { navController.navigate(LOG_DEMO_ROUTE) },
+                            onOpenImageDemo = { navController.navigate("image-demo") },
                         )
                     }
                     composable(UI_COMPONENTS_ROUTE) {
                         UiComponentsScreen(onBack = { navController.popBackStack() })
+                    }
+                    composable("image-demo") {
+                        ImageDemoScreen(onBack = { navController.popBackStack() })
                     }
                     composable(LOG_DEMO_ROUTE) {
                         LogDemoScreen(onBack = { navController.popBackStack() })
@@ -68,7 +73,8 @@ class MainActivity : ComponentActivity() {
 private fun HomeScreen(
     onOpenComponents: () -> Unit,
     onOpenNetworkDemo: () -> Unit,
-    onOpenLogDemo: () -> Unit
+    onOpenLogDemo: () -> Unit,
+    onOpenImageDemo: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -77,6 +83,7 @@ private fun HomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(text = "Hello AndroidMVIBase!")
+        Button(onClick = onOpenImageDemo) { Text(stringResource(R.string.open_image_demo)) }
         Button(
             modifier = Modifier
                 .fillMaxWidth()
@@ -111,6 +118,6 @@ private fun HomeScreen(
 @Composable
 private fun HomeScreenPreview() {
     AndroidMVIBaseTheme {
-        HomeScreen(onOpenComponents = {}, onOpenNetworkDemo = {}, onOpenLogDemo = {})
+        HomeScreen(onOpenComponents = {}, onOpenNetworkDemo = {}, onOpenLogDemo = {}, onOpenImageDemo = {})
     }
 }

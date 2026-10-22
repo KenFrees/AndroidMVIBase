@@ -1,12 +1,14 @@
-# common：公共结果模型与轻量 MVI
+# common：应用基础能力、图片加载与轻量 MVI
 
 ## 职责与边界
 
-保存不属于某个业务功能的公共类型，以及轻量 MVI 的状态容器和临时效果流。不包含业务请求、导航、Toast 或公共 UI。
+作为应用公共底座，提供 Application 基类、统一图片加载、公共结果类型，以及轻量 MVI 的状态容器和临时效果流。不处理业务 API 请求、导航或 Toast，不实现通用图片展示组件。
 
-这是 Android Library，命名空间 `com.ttxz.base.common`，minSdk 26。结果模型源码本身没有使用 Android 或协程 API；MVI 基类依赖 AndroidX ViewModel 和 Coroutines Core。公共 API 暴露这些类型，因此通过 `api` 导出对应依赖，消费者无需仅为这些类型重复声明。Compose 生命周期收集、Hilt 等仍由宿主配置。其他模块依赖 common，common 不反向依赖 app、network。
+这是 Android Library，命名空间 `com.ttxz.base.common`，minSdk 26。通过 `api` 导出 ViewModel、Coroutines Core 和 Coil Compose；图片网络组件作为运行时实现依赖提供。所有依赖 common 的消费者都会带入图片与 Compose 相关依赖，这是统一底座的明确取舍。common 不反向依赖 app、network 或 ui；Hilt、Compose 生命周期收集和宿主的 Compose 构建插件仍由宿主配置。结果模型源码本身不使用 Android 或协程 API。
 
 ## 当前能力
+
+应用与图片入口：[BaseApplication.kt](src/main/java/com/ttxz/base/common/application/BaseApplication.kt)、[ImageLoading.kt](src/main/java/com/ttxz/base/common/image/ImageLoading.kt)。接入、配置覆盖、缓存边界及演示验证见 [图片加载](image-loading.md)。宿主默认继承 BaseApplication 即可，不需要重复实现 Coil 工厂或声明 Coil Compose 依赖。
 
 结果模型入口：[AppResult.kt](src/main/java/com/ttxz/base/common/result/AppResult.kt)。
 
@@ -129,3 +131,7 @@ MVI 基类不包含通用请求、分页、恢复、事件确认或串行 Store�
 2026-10-13：`:common:testDebugUnitTest` 通过（MVI 6 项，0 失败），`:app:assembleDebug` 和 `:app:lintDebug` 通过；Markdown 本地文件链接及 `git diff --check` 通过。本次未执行设备或服务端验证。
 
 修改本模块时，同步检查 [network](../network/README.md) 及所有 AppResult 调用者，并更新本说明。
+
+2026-10-22 应用基类与图片能力迁移：`:app:assembleDebug :app:assembleRelease testDebugUnitTest lintDebug` 通过，82 项单测无失败，lint 无错误。宿主从 BaseApp 改名为 AppApplication 后，使用 `:app:clean` 清理旧 Hilt 生成记录。DAYU_A6 启动及图片显示正常，首次返回 DISK，再次点击返回 MEMORY_CACHE；本地 Uri 未重新验收。
+
+本步阅读顺序：BaseApplication → ImageLoadingConfig/createImageLoader → app 的 AppApplication。练习：指出默认配置从哪里产生、宿主应覆盖哪个方法，以及为什么页面不能直接调用 newImageLoader。
