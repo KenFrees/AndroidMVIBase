@@ -6,6 +6,10 @@
 
 这是 Android Library，命名空间 `com.ttxz.base.network`，minSdk 26。依赖 common、Retrofit、OkHttp、Moshi、Hilt 和协程；使用 KSP 处理 Hilt / Moshi 注解。没有依赖 app，也不负责页面状态和导航。
 
+## 能力导航
+
+从 [network 能力目录](capabilities/README.md) 按名称、用途或关键词查找：网络单例、JSON 转换、请求结果包装、请求日志与超时。目录列出关键用法与约束、源码链接；下文说明当前配置和接入限制。
+
 ## 关键文件与现有能力
 
 | 文件 | 内容 |

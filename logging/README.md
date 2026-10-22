@@ -6,6 +6,10 @@
 
 minSdk 26、compileSdk 37、JVM 字节码 11；沿用 AGP 内置 Kotlin 和现有 Coroutines。使用公开 Android API、java.time 和应用私有目录，无反射、native 库或存储权限。API 26–37 是兼容目标，设备验证必须另行记录。
 
+## 能力导航
+
+从 [logging 能力目录](capabilities/README.md) 按名称、用途或关键词查找：初始化配置、分级日志、异步写入、文件管理与查询、刷新关闭、诊断状态。目录列出关键用法与约束、源码链接；下文保留详细接入与行为说明。
+
 ## 接入与最小示例
 
 消费者声明 `implementation(project(":logging"))`。Application.onCreate 初始化一次；业务类按固定名称获取 Logger，同名始终复用同一个对象。所有 Logger 共用后台写入器；默认 getExternalFilesDir(null)/logs（通常为 /sdcard/Android/data/包名/files/logs），无存储权限。自定义 directoryName 时，宿主同步修改备份排除规则。

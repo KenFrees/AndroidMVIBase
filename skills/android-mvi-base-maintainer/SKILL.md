@@ -20,9 +20,10 @@ description: Use when designing, implementing, teaching, documenting, debugging,
 | 任务 | 规范章节 | 模块资料 |
 | --- | --- | --- |
 | 模块/依赖/构建 | 1、2、7 | 根 README、版本目录、相关模块 Gradle |
-| 公共封装/API | 2、3、4、7 | [common](../../common/README.md)、实际调用者 |
+| 公共封装/API | 2、3、4、7 | [common 能力目录](../../common/capabilities/README.md)、对应模块 README、实际调用者 |
 | 公共 UI 组件 | 2、3、4、6、7 | [UI 组件目录](../../ui/components/README.md)、实际调用者 |
-| 网络/协程/结果 | 3、4、5、7 | [network](../../network/README.md)、[common](../../common/README.md) |
+| 网络/协程/结果 | 3、4、5、7 | [network 能力目录](../../network/capabilities/README.md)、[common 能力目录](../../common/capabilities/README.md)及对应说明 |
+| 本地诊断日志 | 3、4、7 | [logging 能力目录](../../logging/capabilities/README.md)、对应说明、实际调用者 |
 | 示例 UI/MVI | 2、3、5、8 | [app](../../app/README.md)、已落地状态链路 |
 | 注释/学习/文档 | 6 | 被讲解的真实源码和模块 README |
 
@@ -31,7 +32,7 @@ description: Use when designing, implementing, teaching, documenting, debugging,
 1. 明确当前学习步骤：“这一步需要你学习：〔主题〕；先读〔文件〕；本步处理〔边界〕；验收是〔可检查结果〕。”
 2. 跟踪调用方，展示最小用法，说明封装价值、职责分配、失败/取消语义。新公共接口或模块边界先完成设计对齐。
 3. 按规范落实类名、包路径、可见性与 KDoc。允许在授权范围内改进 AppResult 等现有公共 API，说明兼容影响；不把“复用”理解成禁止演进。
-4. 同步模块 README；新增公共 UI 组件时登记 UI 组件目录并提供独立用法说明。面向调用者的行为改变时同步使用者 Skill；验证当前变化。不得将未实现能力写成已存在。
+4. 同步根 README 的能力总览、模块能力目录和对应使用说明；目录统一提供名称、场景关键词、用法与约束、源码链接，路径按 DOC-02。新增或整理公共能力时，按需要在目录同级提供独立 Markdown，列出支持范围、最小调用与常见场景示例，区分参考写法、真实演示和验证范围；没有独立说明的用法使用普通文字，不伪装成链接，目录不承载长篇详情。新增公共 UI 组件时沿用组件目录和独立说明结构。面向调用者的行为改变时同步使用者 Skill；验证当前变化。不得将未实现能力写成已存在。
 5. 收尾说明产出、原因、证据和未覆盖项，给一个小练习。到学习节点停下，遵循用户已明确的连续执行范围。
 
 ## 框架 Review

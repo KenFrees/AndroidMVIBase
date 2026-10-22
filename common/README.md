@@ -6,9 +6,13 @@
 
 这是 Android Library，命名空间 `com.ttxz.base.common`，minSdk 26。通过 `api` 导出 ViewModel、Coroutines Core 和 Coil Compose；图片网络组件作为运行时实现依赖提供。所有依赖 common 的消费者都会带入图片与 Compose 相关依赖，这是统一底座的明确取舍。common 不反向依赖 app、network 或 ui；Hilt、Compose 生命周期收集和宿主的 Compose 构建插件仍由宿主配置。结果模型源码本身不使用 Android 或协程 API。
 
+## 能力导航
+
+从 [common 能力目录](capabilities/README.md) 按名称、用途或关键词查找：应用基类、图片加载与缓存、结果回调、轻量 MVI。目录列出关键用法与约束、源码链接，有独立说明的能力可打开详情；下文保留接入和详细契约。
+
 ## 当前能力
 
-应用与图片入口：[BaseApplication.kt](src/main/java/com/ttxz/base/common/application/BaseApplication.kt)、[ImageLoading.kt](src/main/java/com/ttxz/base/common/image/ImageLoading.kt)。接入、配置覆盖、缓存边界及演示验证见 [图片加载](image-loading.md)。宿主默认继承 BaseApplication 即可，不需要重复实现 Coil 工厂或声明 Coil Compose 依赖。
+应用与图片的支持范围、最小调用、接入和常见用法统一见独立的 [图片加载说明](capabilities/image-loading.md)。宿主默认继承 BaseApplication 即可，不需要重复实现 Coil 工厂或声明 Coil Compose 依赖。
 
 结果模型入口：[AppResult.kt](src/main/java/com/ttxz/base/common/result/AppResult.kt)。
 

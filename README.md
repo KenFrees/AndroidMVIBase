@@ -6,13 +6,17 @@
 
 当前是可编译的基础骨架，不是已完成的生产框架。
 
-| 模块 | 当前能力 | 阅读入口 |
-| --- | --- | --- |
-| `app` | Application、Hilt 入口、Compose 欢迎页、UI 与网络请求示例 | [app/README.md](app/README.md) |
-| `common` | Application 基类、Coil 图片加载、AppResult、轻量 MVI | [common/README.md](common/README.md) |
-| `network` | Hilt 提供网络对象、Moshi 转换、`safeApiCall` | [network/README.md](network/README.md) |
-| `ui` | Compose 公共组件，当前包含加载弹窗与三类消息提示 | [ui/README.md](ui/README.md) |
-| `logging` | Kotlin 本地诊断日志、固定格式、有界异步写入、滚动清理和日志文件查询 | [logging/README.md](logging/README.md) |
+### 能力导航
+
+先按下表选模块，再进入能力目录按名称、用途或关键词查找。目录列出关键用法与约束，并提供真实源码链接；有独立说明文档的条目提供用法链接，其余使用普通文字。目录只列已实现能力，`app` 是演示宿主。
+
+| 模块 | 当前能力 | 能力目录 | 模块接入 |
+| --- | --- | --- | --- |
+| `common` | Application 基类与默认图片配置；Coil 网络/本地图片与缓存；AppResult 结果回调；轻量 MVI 状态与临时效果 | [查找基础能力](common/capabilities/README.md) | [接入说明](common/README.md) |
+| `network` | Hilt 网络单例；Moshi JSON 转换；safeApiCall 异常与取消处理；请求日志与超时配置 | [查找网络能力](network/capabilities/README.md) | [接入说明](network/README.md) |
+| `ui` | LoadingDialog 加载弹窗；ToastHost 成功、警告、错误消息提示 | [查找 UI 组件](ui/components/README.md) | [接入说明](ui/README.md) |
+| `logging` | 初始化与脱敏配置；分级日志与异常；有界异步写入；文件滚动、清理、GZIP；文件查询；刷新、关闭与状态诊断 | [查找日志能力](logging/capabilities/README.md) | [接入说明](logging/README.md) |
+| `app`（演示） | Application/Hilt 接入、图片加载、UI、网络请求与日志示例 | [查找演示入口](app/README.md) | — |
 
 当前 Gradle 依赖：`app → network → common`，同时 `app → common`、`app → ui`、`app → logging`。这些是模块依赖，不代表 UI 应直接请求网络。
 
@@ -118,4 +122,4 @@ Hilt Compose 改用 hilt-lifecycle-viewmodel-compose，文章页的 hiltViewMode
 
 日志库第二阶段：现有 API 35 设备的故障、压力、强杀与页面验收已完成；其他 Android 版本待验收，详见 [可靠性验证](logging/RELIABILITY.md)。
 
-图片加载：common 统一提供 BaseApplication、默认缓存配置及 Coil Compose 依赖，app 提供网络、本地 Uri、失败、空地址演示。DAYU_A6 已验证图片显示、磁盘及内存缓存，本地 Uri 待验收，见 [说明](common/image-loading.md)。
+图片加载：common 统一提供 BaseApplication、默认缓存配置及 Coil Compose 依赖，app 提供网络、本地 Uri、失败、空地址演示。DAYU_A6 已验证图片显示、磁盘及内存缓存，本地 Uri 待验收，见 [说明](common/capabilities/image-loading.md)。

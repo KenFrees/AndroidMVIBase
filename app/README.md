@@ -95,4 +95,4 @@ AGP 9.4 的 `release.optimization.enable = true` 使用默认 Android 优化规�
 
 ## 图片加载示例
 
-首页图片加载入口使用 BaseApplication 提供的共享 Coil 加载器，AppApplication 沿用默认配置；详情见 [说明](../common/image-loading.md)。临时 Uri 授权不持久保存；DAYU_A6 已验证图片显示、磁盘与内存缓存，本地 Uri 待验收。
+首页图片加载入口使用 BaseApplication 提供的共享 Coil 加载器，AppApplication 沿用默认配置；详情见 [说明](../common/capabilities/image-loading.md)。临时 Uri 授权不持久保存；DAYU_A6 已验证图片显示、磁盘与内存缓存，本地 Uri 待验收。

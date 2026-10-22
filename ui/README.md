@@ -16,4 +16,4 @@
 
 ## 图片加载
 
-图片能力已整体归入 common，默认配置、宿主基类和页面使用方式见 [图片加载](../common/image-loading.md)。
+图片能力已整体归入 common，默认配置、宿主基类和页面使用方式见 [图片加载](../common/capabilities/image-loading.md)。
