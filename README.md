@@ -14,13 +14,13 @@
 | --- | --- | --- | --- |
 | `common` | Application 基类与默认图片配置；Coil 网络/本地图片与缓存；AppResult 结果回调；轻量 MVI 状态与临时效果 | [查找基础能力](common/capabilities/README.md) | [接入说明](common/README.md) |
 | `network` | Hilt 网络单例；Moshi JSON 转换；safeApiCall 异常与取消处理；请求日志与超时配置 | [查找网络能力](network/capabilities/README.md) | [接入说明](network/README.md) |
-| `ui` | LoadingDialog 加载弹窗；ToastHost 成功、警告、错误消息提示 | [查找 UI 组件](ui/components/README.md) | [接入说明](ui/README.md) |
+| `ui` | LoadingDialog；ToastHost；列表首屏状态、下拉刷新、Paging 自动追加及加载尾部 | [查找 UI 组件](ui/components/README.md) | [接入说明](ui/README.md) |
 | `logging` | 初始化与脱敏配置；分级日志与异常；有界异步写入；文件滚动、清理、GZIP；文件查询；刷新、关闭与状态诊断 | [查找日志能力](logging/capabilities/README.md) | [接入说明](logging/README.md) |
-| `app`（演示） | Application/Hilt 接入、图片加载、UI、网络请求与日志示例 | [查找演示入口](app/README.md) | — |
+| `app`（演示） | Application/Hilt 接入、图片加载、DummyJSON 商品列表、UI、文章请求与日志示例 | [查找演示入口](app/README.md) | — |
 
 当前 Gradle 依赖：`app → network → common`，同时 `app → common`、`app → ui`、`app → logging`。这些是模块依赖，不代表 UI 应直接请求网络。
 
-common 已提供轻量 MVI 基类，统一只读状态流、原子状态更新和不重放的临时效果广播；app 单篇文章示例已接入。列表页、统一业务错误码、登录态、离线存储均未完成。基类不保证效果可靠交付，也不提供进程恢复或 Action 串行队列。
+common 已提供轻量 MVI 基类，统一只读状态流、原子状态更新和不重放的临时效果广播；app 文章与商品示例已接入。ui 已提供 [列表展示与分页适配](ui/components/list.md)，app 的 [DummyJSON 商品列表](app/product-list.md) 展示网络图片、下拉刷新、自动追加与慢速模式；统一业务错误码、登录态、离线存储均未完成。基类不保证效果可靠交付，也不提供进程恢复或 Action 串行队列。
 
 ## 技术与工程约定
 
@@ -80,7 +80,7 @@ Hilt Compose 改用 hilt-lifecycle-viewmodel-compose，文章页的 hiltViewMode
 | 6 | API → Repository → ViewModel → Compose | 完整示例请求，覆盖加载、成功、失败与重试 | app 单篇文章示例已实现；API 35 已验证加载/成功/404，其他设备场景待验收 |
 | 7 | 复用与 AI Review | 用第二个功能检查规范是否够用，按实际代码完善 Skill | 待开展 |
 
-这是学习路线，不是对所有后续实现的一次性授权。Room、分页、复杂导航等按真实需求再加入。
+这是学习路线，不是对所有后续实现的一次性授权。Room、双向分页、复杂导航等按真实需求再加入；当前列表 UI、单向 Paging 适配及 DummyJSON 商品接口示例见对应说明。
 
 ## 如何构建和使用
 

@@ -4,11 +4,13 @@
 
 ## 查找组件
 
-当前已实现 `LoadingDialog` 和 `ToastHost`。从 [组件目录](components/README.md) 按名称或用途查找。目录只列已实现组件，并指向各自的用法说明和源码；新增公共组件时同步登记，不把所有组件说明堆在本页。
+当前已实现 `LoadingDialog`、`ToastHost`，以及列表状态、下拉刷新和 Paging 自动追加。列表从 [独立说明](components/list.md) 查看支持范围与用法；所有组件从 [组件目录](components/README.md) 按名称或用途查找。目录只列已实现组件，并指向各自的用法说明和源码；新增公共组件时同步登记，不把所有组件说明堆在本页。
 
 ## 接入与依赖
 
-同一 Gradle 工程中的调用方加入 `implementation(project(":ui"))`，并按目标组件的说明调用。例如 `LoadingDialog(visible = isLoading, message = "正在加载")`，或在 `Scaffold` 中放置 `ToastHost` 并调用 `ToastHostState.showSuccess`；实际文案应使用资源，状态约束见各自的 [组件说明](components/README.md)。当前模块通过 [build.gradle.kts](build.gradle.kts) 使用项目已有的 Compose BOM、UI、Animation、Material 3 和 Coroutines 依赖，没有额外的组件库。
+同一 Gradle 工程中的调用方加入 `implementation(project(":ui"))`，并按目标组件的说明调用。例如 `LoadingDialog(visible = isLoading, message = "正在加载")`，或在 `Scaffold` 中放置 `ToastHost` 并调用 `ToastHostState.showSuccess`；实际文案应使用资源，状态约束见各自的 [组件说明](components/README.md)。当前模块通过 [build.gradle.kts](build.gradle.kts) 使用 Compose、Material 3、Coroutines 和 Paging Compose 3.5.3，没有引入第三方刷新库。公开列表 API 暴露的 Foundation、Material 3、Paging Compose 及 Compose BOM 使用 api 导出；宿主仍需启用 Compose 编译插件。
+
+列表 UI 不依赖 network 或 common，不持有业务 API；普通列表传展示状态与回调，分页列表传 LazyPagingItems，由 Paging 管理按需加载。真实接入见 app 的 [DummyJSON 商品列表示例](../app/product-list.md)，库侧另有可控内存源测试。
 
 ## 验证与限制
 

@@ -23,7 +23,7 @@ description: Use when integrating AndroidMVIBase into a business Android project
 | 结果分支与回调 | [common README](../../common/README.md#当前能力) |
 | 轻量 MVI 基类与状态/效果边界 | [common README](../../common/README.md#轻量-mvi-的使用与边界)：common.mvi.BaseViewModel；状态不可变，Lambda 原子更新且无副作用；sendEffect 在调用者协程中挂起发送，无订阅者丢弃、不重放，不保证 UI 执行；必须保留的结果写入 UiState，UI 按生命周期收集 |
 | Retrofit/Moshi/OkHttp、异常包装 | [network 能力目录](../../network/capabilities/README.md)，再读对应配置与接入说明 |
-| Compose 界面组件（Loading、Toast） | [UI 组件目录](../../ui/components/README.md) |
+| Compose 界面组件（Loading、Toast、列表与分页） | [UI 组件目录](../../ui/components/README.md)，列表详见 [独立说明](../../ui/components/list.md) |
 | 本地诊断日志 | [logging 能力目录](../../logging/capabilities/README.md)、[完整契约](../../logging/README.md)：Application.onCreate 调用 Logging.initialize，业务使用 Logging.getLogger(name) 缓存固定名称，所有等级支持可选 Throwable 和延迟正文，先判断等级和容量再执行 lambda；普通正文不截断，队列仅限条数；所有线程满时立即拒绝，不等待队列空间；单文件大小是滚动阈值，目录总预算独立生效；清理内部固定每小时检查，不公开 cleanupIntervalMillis；数值配置仅校验正数和必要关系，默认值仍建议优先使用；记录 true 不等于已写入；挂起刷新/文件查询，单目录单实例，正式环境配置等级和脱敏；非法日期格式回退默认，其他非法配置停用实例，通过初始化结果 enabled / warnings 查询，directory 为实际目录路径；初始化直接输出中文 Logcat 反馈，不受 logcatMinLevel 影响，成功不代表磁盘写入已验证；flush/logFiles/close/status 由 Logging 统一管理；日志异常 message 每层最多保留 512 个 UTF-16 字符单元，与正文统一脱敏，脱敏失败只丢弃当前记录并保留健康文件流；单条超过总目录预算不触发磁盘退避。logFiles(date) 在 IO 线程查询实际目录，返回 Result<List<File>>，支持日期筛选及从新到旧排序；无文件为空列表，读取失败返回 failure，取消传播。查询不刷新、不复制，文件可能追加、滚动重命名或清理；读取与复制由宿主处理。无 ZIP 导出。 |
 | Hilt 宿主与 Compose 示例入口 | [app README](../../app/README.md) |
 | 已实现范围与当前限制 | [项目总览](../../README.md)中的当前进度和限制；学习路线不约束接入方 |
@@ -80,3 +80,11 @@ logging 历史日志会自动变为 `.log.gz`，查询仍返回 File，调用方
 先读独立的 [图片加载说明](../../common/capabilities/image-loading.md)，其中包含支持范围、最小调用、宿主接入、网络图、本地 Uri、圆形头像与回调说明。示例资源和包名由接入方替换，参考写法不等于已在目标业务设备验收。
 
 图片加载整体由 common 提供。消费者依赖 common 即可使用其 api 导出的 Coil Compose。宿主继承 common.application.BaseApplication，并在 Manifest 中注册自己的 Application；默认使用 ImageLoadingConfig，可覆盖 imageLoadingConfig()。Hilt 注解和业务、日志初始化保留在宿主，onCreate 调用 super；配置在共享加载器创建时读取，不动态更新。已有 Application 基类时可使用 common.image.createImageLoader 接入 Coil 工厂。页面决定占位、失败、空地址图片，不在页面直接调用工厂或反复创建加载器。
+
+## 列表与分页
+
+ui.list 提供 RefreshList、PagingList、ListStateLayout 和 LoadMoreFooter，先读 [列表说明](../../ui/components/list.md)。依赖 ui 可使用其 api 导出的 Foundation、Material 3、Paging Compose；宿主仍提供 Compose 编译配置与数据层依赖。
+
+普通列表由宿主明确提供 ListContentState，不把未加载、成功空集和失败都归为空数据。PagingList 接收 collectAsLazyPagingItems 的结果，按 Paging 状态展示首屏、刷新、追加及重试；itemKey 使用稳定唯一标识，条目布局与点击由业务提供。刷新失败保留已有数据，在列表上方固定提示；追加失败在尾部重试；默认错误文案不输出底层异常。retry 与 refresh 由组件委托给 Paging，自动预取由数据层 PagingConfig 决定，没有严格上拉释放手势。
+
+Pager/数据流由宿主稳定持有，按需 cachedIn(viewModelScope)，不在重组中反复创建。筛选变化、旧请求取消和分页协议由宿主管理，不新增同义结果封装或默认假定 page/total 规则。列表应有有界高度，不嵌入同向无界滚动容器；滚动回顶与进程恢复由宿主决定。组件不额外发 Toast，不接管 ViewModel 生命周期，也不保证后台停止所有请求。真实接入可参考 app 的 [DummyJSON 商品列表](../../app/product-list.md)，其中的业务 API、DTO、服务地址和演示延迟不属于公共库。库内内存源及示例验收不等于目标业务接口或全部设备已验收。

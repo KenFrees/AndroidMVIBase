@@ -1,4 +1,10 @@
 <resources>
+    <string name="open_product_list">商品列表示例</string>
+    <string name="product_list_title">商品列表</string>
+    <string name="product_slow_loading">慢速演示（延迟 1.5 秒）</string>
+    <string name="product_list_hint">DummyJSON · 已加载 %1$d 条。下拉刷新，接近底部自动加载。</string>
+    <string name="product_price">价格：%1$s</string>
+    <string name="product_id">商品 #%1$d</string>
     <string name="open_image_demo">图片加载示例</string>
     <string name="image_demo_hint">蓝灰色：加载占位；红色：失败；灰色：空地址。切换到失败或空地址后再加载网络图，可观察缓存来源。外部图片服务可用性不保证。</string>
     <string name="image_demo_network">加载网络图片</string>

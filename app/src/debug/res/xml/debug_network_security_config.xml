@@ -4,6 +4,8 @@
     <domain-config>
         <domain includeSubdomains="false">jsonplaceholder.typicode.com</domain>
         <domain includeSubdomains="false">raw.githubusercontent.com</domain>
+        <domain includeSubdomains="false">dummyjson.com</domain>
+        <domain includeSubdomains="false">cdn.dummyjson.com</domain>
         <trust-anchors>
             <certificates src="system" />
             <certificates src="user" />

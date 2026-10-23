@@ -1,4 +1,10 @@
 <resources>
+    <string name="ui_list_loading">Loading</string>
+    <string name="ui_list_empty">No items</string>
+    <string name="ui_list_load_failed">Could not load items</string>
+    <string name="ui_list_refresh_failed">Could not refresh items</string>
+    <string name="ui_list_retry">Retry</string>
+    <string name="ui_list_no_more">No more items</string>
     <string name="ui_toast_status_success">Success</string>
     <string name="ui_toast_status_failure">Failure</string>
     <string name="ui_toast_status_warning">Warning</string>

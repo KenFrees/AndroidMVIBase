@@ -2,7 +2,7 @@
 
 ## 职责与当前能力
 
-app 用于启动、展示和验证基础模块。首页提供 UI 组件、网络请求和日志测试入口；UI 演示页包含 Loading 弹窗及三类 Toast，网络演示页调用 JSONPlaceholder 文章接口并接入 common 的轻量 MVI 基类。尚未实现登录或网络列表页。
+app 用于启动、展示和验证基础模块。首页提供图片加载、商品列表、UI 组件、网络请求和日志测试入口；UI 演示页包含 Loading 弹窗及三类 Toast，网络演示页调用 JSONPlaceholder 文章接口。商品列表调用 DummyJSON，复用公共列表与图片能力，详见 [独立示例说明](product-list.md)。文章与商品功能沿用 common 的轻量 MVI；尚未实现登录。
 
 应用 ID / 命名空间为 `com.ttxz.base`，minSdk 26；依赖 common、network 和 ui，并配置 Compose、Hilt、KSP。
 
@@ -16,6 +16,7 @@ app 用于启动、展示和验证基础模块。首页提供 UI 组件、网络
 | [UiComponentsScreen.kt](src/main/java/com/ttxz/base/demo/ui/UiComponentsScreen.kt) | Loading 和 Toast 的页面内演示状态与按钮 |
 | [data/remote](src/main/java/com/ttxz/base/data/remote) | 宿主内可复用的 PostApi、PostDto 和 Hilt 绑定；复用 network 模块的 Retrofit |
 | [demo/post](src/main/java/com/ttxz/base/demo/post) | 文章功能包：Repository、Screen、ViewModel、Action、UiState 和 Effect |
+| [demo/product](src/main/java/com/ttxz/base/demo/product) | DummyJSON 商品列表：偏移分页、Repository、ViewModel 与页面；API/DTO/绑定位于 data/remote，详见独立示例说明 |
 | [Debug 网络安全配置](src/debug/res/xml/debug_network_security_config.xml) | 仅在 Debug 构建中让演示域名信任设备用户 CA，以支持 HTTPS 抓包代理 |
 | [ui/theme](src/main/java/com/ttxz/base/ui/theme) | Compose 颜色、字体与主题 |
 | [AndroidManifest.xml](src/main/AndroidManifest.xml) | 注册 Application / 启动 Activity，声明 INTERNET 权限 |
@@ -23,11 +24,11 @@ app 用于启动、展示和验证基础模块。首页提供 UI 组件、网络
 
 ## 如何运行与使用
 
-Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显示 `Hello AndroidMVIBase!`、 “UI 组件”和“网络请求示例”及“日志测试”三个入口。UI 页可测试两秒后自动关闭的 Loading 及三类 [ToastHost](../ui/components/toast.md) 消息。网络页点击“请求文章”访问 `GET /posts/1`，请求中显示公共 [LoadingDialog](../ui/components/loading-dialog.md)，成功后显示文章及成功 Toast；“测试 404 错误”也是按钮，请求不存在的文章后显示错误及失败 Toast。页面顶部和系统返回键均可返回首页。
+Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显示 `Hello AndroidMVIBase!` 和五个示例入口。商品列表自动请求并展示缩略图、名称、价格与 ID，支持下拉刷新、自动追加和慢速演示开关。UI 页可测试两秒后自动关闭的 Loading 及三类 [ToastHost](../ui/components/toast.md) 消息。网络页点击“请求文章”访问 `GET /posts/1`，请求中显示公共 [LoadingDialog](../ui/components/loading-dialog.md)，成功后显示文章及成功 Toast；“测试 404 错误”也是按钮，请求不存在的文章后显示错误及失败 Toast。页面顶部和系统返回键均可返回首页。
 
 网络页使用现有 Base URL `https://jsonplaceholder.typicode.com/`。该免费模拟服务适合学习，不能保证长期在线，也不应作为正式业务服务；网络不通时页面会显示失败并允许再次请求。
 
-若调试设备使用 HTTPS 抓包代理，Debug 构建只对 `jsonplaceholder.typicode.com` 额外信任设备用户 CA；代理 CA 仍需正确安装在设备上。Release 构建不包含这项信任配置。证书验证失败时，演示页会明确提示检查设备代理及证书，不会关闭 TLS 校验。
+若调试设备使用 HTTPS 抓包代理，Debug 构建对文章演示域名 `jsonplaceholder.typicode.com` 额外信任设备用户 CA；图片与商品域名规则见各自说明，代理 CA 仍需正确安装在设备上。Release 构建不包含这项信任配置。文章页证书验证失败时会明确提示检查设备代理及证书，不会关闭 TLS 校验。
 
 仓库根目录执行：
 
@@ -59,8 +60,8 @@ Android Studio Sync 后选择 app，在 API 26 及以上设备运行。首页显
 
 ## 验证与当前限制
 
-- app 当前测试目录是模板示例，不覆盖业务网络或真实用户流程；common 的 MVI 单测覆盖状态更新及临时效果流契约，不能替代文章页设备验收。
-- Navigation Compose 目前只用于首页与演示页之间的导航；文章示例接入 common 的轻量 MVI 基类，不包含通用列表、请求或事件确认系统。
+- app 除模板测试外，新增商品分页源单测，覆盖分页边界、错误及取消；common 的 MVI 单测覆盖状态更新及临时效果流契约，均不能替代真实接口与页面设备验收。
+- Navigation Compose 用于首页与演示页之间的导航；列表的通用 UI 与 Paging 适配位于 ui，商品分页协议位于 app，不包含可靠事件确认或进程恢复系统。
 - 标准 release 已启用 R8 代码优化和资源压缩，日志接入在 API 35 实机通过；日志页跨版本验收见 logging/VERIFICATION.md；发布签名和其他网络/UI 全流程仍未完成。
 - network 已修正取消传播；日志策略和环境地址配置仍待完善，详见该模块 README。
 - 已完成的 Debug 构建记录见 [项目 README](../README.md)，后续修改须提供本次验证结果。
@@ -96,3 +97,7 @@ AGP 9.4 的 `release.optimization.enable = true` 使用默认 Android 优化规�
 ## 图片加载示例
 
 首页图片加载入口使用 BaseApplication 提供的共享 Coil 加载器，AppApplication 沿用默认配置；详情见 [说明](../common/capabilities/image-loading.md)。临时 Uri 授权不持久保存；DAYU_A6 已验证图片显示、磁盘与内存缓存，本地 Uri 待验收。
+
+## 商品列表示例
+
+首页进入“商品列表示例”，使用 DummyJSON 展示缩略图、名称、价格与 ID，支持下拉刷新、自动追加、没有更多与慢速演示。接入链路、分页规则及本轮验证范围见 [商品列表独立说明](product-list.md)。Review 修正后 Debug/Release、16 项 app 单测和 lint 已通过。2026-10-23 在 DAYU_A6（Android 15 / API 35）的 Debug 包通过真实商品图片、自动分页至本次末页 194 条、慢速加载尾部、下拉刷新及返回/重新进入验收；另以 1 项内存接口仪器测试验证组合状态恢复和开关回顶。Release 运行、真实旋转、断网重试与其他设备场景未覆盖。

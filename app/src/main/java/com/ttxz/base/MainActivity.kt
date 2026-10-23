@@ -28,11 +28,13 @@ import com.ttxz.base.ui.theme.AndroidMVIBaseTheme
 import dagger.hilt.android.AndroidEntryPoint
 import com.ttxz.base.demo.logging.LogDemoScreen
 import com.ttxz.base.demo.image.ImageDemoScreen
+import com.ttxz.base.demo.product.ProductListScreen
 
 private const val HOME_ROUTE = "home"
 private const val UI_COMPONENTS_ROUTE = "ui-components"
 private const val POST_DEMO_ROUTE = "post-demo"
 private const val LOG_DEMO_ROUTE = "log-demo"
+private const val PRODUCT_LIST_ROUTE = "product-list"
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -49,6 +51,7 @@ class MainActivity : ComponentActivity() {
                             onOpenNetworkDemo = { navController.navigate(POST_DEMO_ROUTE) },
                             onOpenLogDemo = { navController.navigate(LOG_DEMO_ROUTE) },
                             onOpenImageDemo = { navController.navigate("image-demo") },
+                            onOpenProductList = { navController.navigate(PRODUCT_LIST_ROUTE) },
                         )
                     }
                     composable(UI_COMPONENTS_ROUTE) {
@@ -63,18 +66,23 @@ class MainActivity : ComponentActivity() {
                     composable(POST_DEMO_ROUTE) {
                         PostDemoScreen(onBack = { navController.popBackStack() })
                     }
+                    composable(PRODUCT_LIST_ROUTE) {
+                        ProductListScreen(onBack = { navController.popBackStack() })
+                    }
                 }
             }
         }
     }
 }
 
+@Preview(showBackground = true)
 @Composable
 private fun HomeScreen(
     onOpenComponents: () -> Unit,
     onOpenNetworkDemo: () -> Unit,
     onOpenLogDemo: () -> Unit,
     onOpenImageDemo: () -> Unit,
+    onOpenProductList: () -> Unit,
 ) {
     Column(
         modifier = Modifier
@@ -83,7 +91,16 @@ private fun HomeScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(text = "Hello AndroidMVIBase!")
-        Button(onClick = onOpenImageDemo) { Text(stringResource(R.string.open_image_demo)) }
+        Button(modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(top = 10.dp),
+            onClick = onOpenImageDemo) { Text(stringResource(R.string.open_image_demo)) }
+        Button(modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(top = 10.dp),
+            onClick = onOpenProductList) { Text(stringResource(R.string.open_product_list)) }
         Button(
             modifier = Modifier
                 .fillMaxWidth()
@@ -118,6 +135,12 @@ private fun HomeScreen(
 @Composable
 private fun HomeScreenPreview() {
     AndroidMVIBaseTheme {
-        HomeScreen(onOpenComponents = {}, onOpenNetworkDemo = {}, onOpenLogDemo = {}, onOpenImageDemo = {})
+        HomeScreen(
+            onOpenComponents = {},
+            onOpenNetworkDemo = {},
+            onOpenLogDemo = {},
+            onOpenImageDemo = {},
+            onOpenProductList = {},
+        )
     }
 }

@@ -9,4 +9,4 @@
 | `AppResult` 与结果回调 | 成功、失败、Loading、泛型、`onSuccess`、`onError` | Loading 只是值，回调不切线程；结果不等于页面状态，用法见模块 README | [AppResult.kt](../src/main/java/com/ttxz/base/common/result/AppResult.kt) |
 | 轻量 MVI | `BaseViewModel`、Action、State、Effect、StateFlow、SharedFlow、原子更新 | Effect 不重放，无订阅者会丢弃；不提供请求队列或进程恢复，用法见模块 README | [BaseViewModel.kt](../src/main/java/com/ttxz/base/common/mvi/BaseViewModel.kt)、[MviContract.kt](../src/main/java/com/ttxz/base/common/mvi/MviContract.kt) |
 
-新增或调整公共能力时，同步本表、对应使用说明和真实示例入口。当前没有分页、可靠消息确认、进程状态恢复等通用封装，不能由已引入的第三方依赖推断这些能力已经存在。
+新增或调整公共能力时，同步本表、对应使用说明和真实示例入口。common 不提供分页引擎、可靠消息确认或进程状态恢复；列表展示与 Paging 适配见 [UI 列表说明](../../ui/components/list.md)。不能由已引入的第三方依赖推断其他能力已经存在。
